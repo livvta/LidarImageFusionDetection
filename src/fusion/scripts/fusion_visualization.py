@@ -5,8 +5,8 @@
 fusion_visualization
 ================
 
-Version: 1.2
-Last Modified: 2024-11-06 16:35
+Version: 1.2.1
+Last Modified: 2024-11-15 10:47
 '''
 
 import rospy
@@ -20,7 +20,7 @@ from fusion_utils import read_calib, imgmsg_to_cv2, process_points
 
 
 # 读取标定文件
-P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix = read_calib( )
+P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix = read_calib()
 intrinsic = P2[:, :3]
 extrinsic = np.matmul(R0, lidar2camera_matrix)
 
@@ -30,43 +30,52 @@ class FusionVisualization:
         # 初始化ros节点，节点名称为fusion_visualization
         rospy.init_node('fusion_visualization', anonymous=False)
 
-        # 订阅velodyne_points话题，消息类型为PointCloud2
+        # 订阅processed_points话题，消息类型为PointCloud2
         self.pointcloud_sub = rospy.Subscriber('processed_points', PointCloud2, self.pointcloud_callback)
 
-        # 订阅image话题，消息类型为Image   
+        # 订阅kitti_cam话题，消息类型为Image   
         self.image_sub = rospy.Subscriber('kitti_cam', Image, self.image_callback)
+
+        # 初始化变量
+        self.cv_image = None
+        self.depth = None
+        self.initialized = False
 
 
     def image_callback(self, img_msg):
-        # 将Image消息转换为cv2
+        # 将Image消息转换为cv2图像
         self.cv_image = imgmsg_to_cv2(img_msg)
 
         # 获取图像height和width
-        if not hasattr(self, 'initialized') or not self.initialized:
+        if not self.initialized:
             self.height, self.width = self.cv_image.shape[:2]
-            self.initialized = True # 避免重复初始化
+            self.initialized = True  # 避免重复初始化
 
 
     def pointcloud_callback(self, pcl_msg):
-        #解析点云消息
-        points = process_points(pcl_msg)
+        # 解析点云消息
+        self.points = process_points(pcl_msg)
 
         if self.cv_image is not None:
-            # 三维点云投影生成深度图
-            depth = self.points_to_depth(points, self.height, self.width, intrinsic, extrinsic)
+            self.fuse_and_display()
 
-            # 深度图上色渲染
-            colored_depth = self.depth_colorize(depth)
 
-            # 叠加上色后深度图至相机图像
-            fusion_image = self.blend_images(self.cv_image, colored_depth)
+    def fuse_and_display(self):
+        # 三维点云投影生成深度图
+        self.depth = self.points_to_depth(self.points, self.height, self.width, intrinsic, extrinsic)
 
-            # 绘制检测结果
-            self.draw_detection(fusion_image)
+        # 深度图上色渲染
+        colored_depth = self.depth_colorize(self.depth)
+
+        # 叠加上色后深度图至相机图像
+        fusion_image = self.blend_images(self.cv_image, colored_depth)
+
+        # 绘制检测结果
+        self.draw_detection(fusion_image)
 
 
     def draw_detection(self, fusion_image):
-        # ToDo
+        # 显示融合后的图像
         cv2.imshow('Fused Image', fusion_image)
         cv2.waitKey(1)
 
@@ -109,7 +118,7 @@ class FusionVisualization:
         depth = (depth - np.min(depth)) / (np.max(depth) - np.min(depth))
         cmap = plt.cm.jet
         depth_colored = (255 * cmap(depth)[:, :, :3]).astype(np.uint8)
-        depth_colored_rgba =  cv2.cvtColor(depth_colored, cv2.COLOR_RGB2BGRA)
+        depth_colored_rgba = cv2.cvtColor(depth_colored, cv2.COLOR_RGB2BGRA)
         depth_colored_rgba[depth == 0] = [0, 0, 0, 0]
 
         return depth_colored_rgba
@@ -117,7 +126,7 @@ class FusionVisualization:
 
     def blend_images(self, image, colored_depth):
         """
-        叠加深度图至相机image
+        叠加深度图至相机图像
         @param image:               np.ndarray  [H, W, 3]   BGR
         @param colored_depth:       np.ndarray  [H, W, 4]   RGBA
         @return:                    np.ndarray  [H, W, 4]   BGRA
@@ -136,4 +145,4 @@ if __name__ == '__main__':
         fusion = FusionVisualization()
         rospy.spin()
     except rospy.ROSInterruptException:
-        pass        
+        pass
