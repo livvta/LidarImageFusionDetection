@@ -5,12 +5,12 @@
 yolov5_node
 ================
 
-Version: 2.2
-Last Modified: 2024-11-08 01:16
+Version: 2.2.1
+Last Modified: 2024-11-15 13:44
 
-更新日志：
-11.05：将YOLODetection消息类型更新为BoundingBox2DArray
-11.08：提高代码复用，优化可视化效果
+更新日志: 
+11.05: 将YOLODetection消息类型更新为BoundingBox2DArray
+11.08: 提高代码复用, 优化可视化效果
 '''
 
 
@@ -27,35 +27,35 @@ model = 'custom'
 path = '/home/harris/model/yolov5/runs/train/exp7/weights/best.pt'
 source = 'local'
 
-# 初始化模型
-model = torch.hub.load(dir, model, path=path, source=source)
-
 # 是否启用可视化功能
 cv2_visualization = True
 
 # 设置置信度阈值（仅对可视化有效)
-confidence_threshold = 0.5
+yolo_confidence_threshold = 0.5
 
 
 class YoloV5Node:
     def __init__(self):
-        # 初始化 ROS 节点 , 节点名称为 yolov5_node
+        # 初始化模型
+        self.yolov5_model = torch.hub.load(dir, model, path=path, source=source)
+
+        # 初始化 ROS 节点, 节点名称为yolov5_node
         rospy.init_node('yolov5_node', anonymous=False)
         
-        # 订阅图像话题 , 话题名称为 /camera/image_raw
+        # 订阅图像话题, 消息类型为Image
         self.image_sub = rospy.Subscriber("kitti_cam", Image, self.image_callback)
         
-        # 创建yolo_detections话题，消息类型为BoundingBox2DArray，用于发布检测结果
+        # 创建yolo_detections话题, 消息类型为BoundingBox2DArray, 用于发布检测结果
         self.yolo_detection_pub = rospy.Publisher('yolo_detections', BoundingBox2DArray, queue_size=10)
 
 
     def image_callback(self, msg):
         try:
-            # 将Image消息转换为cv2
+            # 将Image消息转换为模型输入格式
             cv_image = self.imgmsg_to_cv2(msg)
 
-            # 调用模型进行检测
-            results = model(cv_image)
+            # 调用YoloV5模型检测
+            results = self.yolov5_model(cv_image)
 
             # 发布检测结果
             self.publish_results(results)
@@ -70,7 +70,11 @@ class YoloV5Node:
 
 
     def imgmsg_to_cv2(self, img_msg):
-        '''因 CV_Bridge 与 Python 3 兼容性差，须手动实现转换。 ''' 
+        '''
+        将ROS Image消息转换为OpenCV格式
+        @param img_msg      ROS Image消息
+        @return:            np.ndarray  OpenCV格式图像
+        ''' 
         # 检查图像编码格式
         if img_msg.encoding != "bgr8":
             raise ValueError("Unsupported image encoding: {}".format(img_msg.encoding))
@@ -78,8 +82,8 @@ class YoloV5Node:
         # 创建图像数据类型
         dtype = np.dtype("uint8").newbyteorder('>' if img_msg.is_bigendian else '<')
 
-        # 使用缓冲区创建 OpenCV 图像;
-        image_opencv=np.ndarray(
+        # 使用缓冲区创建 OpenCV 图像
+        image_opencv = np.ndarray(
             shape=(img_msg.height, img_msg.width, 3), 
             dtype=dtype, 
             buffer=img_msg.data
@@ -89,21 +93,25 @@ class YoloV5Node:
 
 
     def draw_detections(self, image, results):
-        # 设置类别颜色
+        '''
+        绘制YOLO检测结果
+        @param image    np.ndarray  OpenCV格式图像
+        @param results  Det2DDataSample  YOLO检测结果
+        '''
+        # 复制原图像
+        image_copy = image.copy()
+
         colors = [
             (255, 0, 0),    # 红色
             (0, 190, 0),    # 深绿色
             (0, 0, 255),    # 蓝色
         ]
-        thickness = 1       # 标签粗细
+        font = cv2.FONT_HERSHEY_SIMPLEX # 字体        
+        thickness = 1       # 标签字体粗细
         font_size = 0.5     # 标签字号
-        font = cv2.FONT_HERSHEY_SIMPLEX # 字体
-
-        image_copy = image.copy()
 
         for *xyxy, conf, cls in results.xyxy[0]:
-
-            if conf < confidence_threshold: 
+            if conf < yolo_confidence_threshold: 
                 continue
 
             x_min, y_min, x_max, y_max = map(int, xyxy)
@@ -128,23 +136,21 @@ class YoloV5Node:
         cv2.imshow('YOLOv5 Detection', image_copy)
         cv2.waitKey(1)
 
-        return
-
 
     def publish_results(self, results):
-        '''将检测结果处理为BoundingBox2DArray类型'''
+        '''
+        以BoundingBox2DArray消息类型发布YOLO检测结果
+        @param results  Det2DDataSample  YOLO检测结果
+        '''
         bbox2d_array = BoundingBox2DArray()
         bbox2d_array.header.stamp = rospy.Time.now()
         bbox2d_array.header.frame_id = "camera_link" 
 
-        # bboxes = []
-        # value = []
-        # class_names = []
-
         for *xyxy, conf, cls in results.xyxy[0]:
-            x_min, y_min, x_max, y_max = xyxy
-
             bbox2d = BoundingBox2D()
+            
+            # 解析边界框参数
+            x_min, y_min, x_max, y_max = xyxy
 
             bbox2d.x_min = float(x_min)
             bbox2d.y_min = float(y_min)
@@ -153,11 +159,10 @@ class YoloV5Node:
             bbox2d.value = float(conf)
             bbox2d.label = int(cls)
             
+            # 添加bbox2d到bbox2d_array
             bbox2d_array.boxes.append(bbox2d)
 
-            self.yolo_detection_pub.publish(bbox2d_array)
-
-        return
+        self.yolo_detection_pub.publish(bbox2d_array)
 
 
 if __name__ == '__main__':
@@ -166,5 +171,4 @@ if __name__ == '__main__':
         rospy.spin()
     except rospy.ROSInterruptException:
         cv2.destroyAllWindows()
-        pass
 
