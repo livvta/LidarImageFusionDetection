@@ -50,7 +50,7 @@ class LidarCamPub:
     def callback(self, pcl_msg):
         self.callback_count += 1
 
-        if self.callback_count >= 5: # 每10条消息处理一次  10Hz -> 2Hz
+        if self.callback_count >= 2: # 每10条消息处理一次  10Hz -> 2Hz
             self.callback_count = 0
 
             # 进行点云处理

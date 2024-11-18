@@ -145,11 +145,11 @@ class PointPillarsNode:
         @param scores_3d:       np.ndarray  [N]
         -------------------------------------------------
         jsk_recognition_msgs/BoundingBox.msg
-        Header header //消息头
-        geometry_msgs/Pose pose	//位姿
-        geometry_msgs/Vector3 dimensions //尺寸
-        float32 value //置信度
-        unit32 label //标签
+        Header header // 消息头
+        geometry_msgs/Pose pose	// 位姿
+        geometry_msgs/Vector3 dimensions // 尺寸
+        float32 value // 置信度
+        unit32 label  // 标签
         '''
         bbox_array = BoundingBoxArray()
         current_time = rospy.Time.now()  # 只计算一次
