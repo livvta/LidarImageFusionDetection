@@ -2,8 +2,13 @@
 # coding:utf-8
 
 '''
-Version: 1.0.0
+pubtools
+==============================
+Version: 1.1
 Created Time: 2024-11-25
+
+Update:
+V1.1: 241126优化代码以减少重复并提高可读性
 '''
 
 import cv2
@@ -30,43 +35,56 @@ def pointcloud_pub(point_cloud, pcl_pub):
 
 
 def image_pub(img, image_pub):
-
     img_msg = cv2_to_imgmsg(img)
     image_pub.publish(img_msg)
 
 
-def auto_image_pointcloud_pub(image_path, pc_path):
-    '''
-    自动依次发布图像和点云到 ROS 话题 /camera/image_raw 和 /velodyne_points
-    '''
-    frame = 0
-    rate = rospy.Rate(int(raw_input("Enter Rate: ")))
+def publish_data(image_path, pc_path, auto_mode=True):
+    frame = 0 if auto_mode else int(raw_input("Enter starting frame: "))
+    rate = rospy.Rate(int(raw_input("Enter Rate: "))) if auto_mode else None
 
-    cam_pub = rospy.Publisher('/camera/image_raw', Image, queue_size=10)
     pcl_pub = rospy.Publisher('velodyne_points', PointCloud2, queue_size=10)
+    cam_pub = rospy.Publisher('/camera/image_raw', Image, queue_size=10)
+
+    pcl_files = sorted([f for f in os.listdir(pc_path) if f.endswith('.bin')])
+    image_files = sorted([f for f in os.listdir(image_path) if f.endswith(('.png', '.jpg', '.jpeg'))])
 
     while not rospy.is_shutdown():
-        point_cloud = np.fromfile(os.path.join(pc_path, '%010d.bin'%frame),dtype=np.float32).reshape(-1,4)
-        img = cv2.imread(os.path.join(image_path, '%010d.png'%frame))
+        point_cloud = np.fromfile(os.path.join(pc_path, pcl_files[frame]), dtype=np.float32).reshape(-1, 4)
+        img = cv2.imread(os.path.join(image_path, image_files[frame]))
 
-        image_pub(img, cam_pub)
+        if img is None:
+            rospy.logerr("无法读取图片: %s", os.path.join(image_path, image_files[frame]))
+            break
+
         pointcloud_pub(point_cloud, pcl_pub)
-        rospy.loginfo("Image & PointCloud published")
+        image_pub(img, cam_pub)
 
-        rate.sleep()
-        frame += 1
-        frame %= 154
+        rospy.loginfo("Image & PointCloud published: %d", frame)
+
+        if not auto_mode:
+            cv2.destroyAllWindows()
+            cv2.imshow("image: {}".format(frame), img)
+            key = cv2.waitKey(0)
+            if key == ord('m'):  # 下一帧
+                frame = (frame + 1) % len(image_files)
+            elif key == ord('n'):  # 上一帧
+                frame = (frame - 1) % len(image_files)
+            elif key == ord('q'):  # 退出
+                break
+        else:
+            rate.sleep()
+            frame = (frame + 1) % len(image_files)
+
+    cv2.destroyAllWindows()
 
 
 def manual_image_pub(image_path):
-    '''
-    以文件名称为顺序，依次发布图像到 ROS 话题 /camera/image_raw
-    '''
     frame = int(raw_input("Enter starting frame: "))
     cam_pub = rospy.Publisher('/camera/image_raw', Image, queue_size=10)
     image_files = sorted([f for f in os.listdir(image_path) if f.endswith(('.png', '.jpg', '.jpeg'))])
 
-    while not rospy.is_shutdown():     
+    while not rospy.is_shutdown():
         img = cv2.imread(os.path.join(image_path, image_files[frame]))
 
         if img is None:
@@ -80,86 +98,35 @@ def manual_image_pub(image_path):
         cv2.imshow("image: {}".format(frame), img)
 
         key = cv2.waitKey(0)
-        if key == ord('m'):  # 按下 'm' 键切换到下一张
+        if key == ord('m'):
             frame = (frame + 1) % len(image_files)
-        elif key == ord('n'):  # 按下 'n' 键切换到上一张
+        elif key == ord('n'):
             frame = (frame - 1) % len(image_files)
-        elif key == ord('q'):  # 按下 'q' 键退出
-            break
-
-    cv2.destroyAllWindows()
-
-
-
-def manual_image_pointcloud_pub(image_path, pc_path):
-    '''
-    手动依次发布图像和点云到 ROS 话题 /camera/image_raw 和 /velodyne_points
-    '''
-    frame = int(raw_input("Enter starting frame: "))
-    cam_pub = rospy.Publisher('/camera/image_raw', Image, queue_size=10)
-    pcl_pub = rospy.Publisher('velodyne_points', PointCloud2, queue_size=10)
-
-    image_files = sorted([f for f in os.listdir(image_path) if f.endswith(('.png', '.jpg', '.jpeg'))])
-    pcl_files = sorted([f for f in os.listdir(pc_path) if f.endswith(('.bin'))])
-
-    while not rospy.is_shutdown():
-        point_cloud = np.fromfile(os.path.join(pc_path, pcl_files[frame]), dtype=np.float32).reshape(-1, 4)        
-        img = cv2.imread(os.path.join(image_path, image_files[frame]))
-
-        if img is None:
-            rospy.logerr("无法读取图片: %s", os.path.join(image_path, image_files[frame]))
-            break
-
-        image_pub(img, cam_pub)
-        pointcloud_pub(point_cloud, pcl_pub)
-        rospy.loginfo("Image & PointCloud published: %d", frame)
-
-        cv2.destroyAllWindows()
-        cv2.imshow("image: {}".format(frame), img)
-
-        key = cv2.waitKey(0)
-        if key == ord('m'):  # 按下 'm' 键切换到下一张
-            frame = (frame + 1) % len(image_files)
-        elif key == ord('n'):  # 按下 'n' 键切换到上一张
-            frame = (frame - 1) % len(image_files)
-        elif key == ord('q'):  # 按下 'q' 键退出
+        elif key == ord('q'):
             break
 
     cv2.destroyAllWindows()
 
 
 def manual_pointcloud_pub(pc_path):
-    '''
-    手动依次发布点云到 ROS 话题 /velodyne_points
-    '''
     frame = int(raw_input("Enter starting frame: "))
     pcl_pub = rospy.Publisher('velodyne_points', PointCloud2, queue_size=10)
-
-    image_files = sorted([f for f in os.listdir(image_path) if f.endswith(('.png', '.jpg', '.jpeg'))])
-    pcl_files = sorted([f for f in os.listdir(pc_path) if f.endswith(('.bin'))])
+    pcl_files = sorted([f for f in os.listdir(pc_path) if f.endswith('.bin')])
 
     while not rospy.is_shutdown():
-        point_cloud = np.fromfile(os.path.join(pc_path, pcl_files[frame]), dtype=np.float32).reshape(-1, 4)        
-        img = cv2.imread(os.path.join(image_path, image_files[frame]))
-        # resize image
-        img_resized = cv2.resize(img, (621, 187))
-
+        point_cloud = np.fromfile(os.path.join(pc_path, pcl_files[frame]), dtype=np.float32).reshape(-1, 4)
         pointcloud_pub(point_cloud, pcl_pub)
         rospy.loginfo("PointCloud published: %d", frame)
 
-        cv2.destroyAllWindows()
-        cv2.imshow("Pointcloud2 Publisher No. {}".format(frame), img_resized)
-
         key = cv2.waitKey(0)
-        if key == ord('m'):  # 按下 'm' 键切换到下一张
-            frame = (frame + 1) % len(image_files)
-        elif key == ord('n'):  # 按下 'n' 键切换到上一张
-            frame = (frame - 1) % len(image_files)
-        elif key == ord('q'):  # 按下 'q' 键退出
+        if key == ord('m'):
+            frame = (frame + 1) % len(pcl_files)
+        elif key == ord('n'):
+            frame = (frame - 1) % len(pcl_files)
+        elif key == ord('q'):
             break
 
     cv2.destroyAllWindows()
-
 
 
 if __name__ == '__main__':
@@ -188,16 +155,14 @@ if __name__ == '__main__':
     if dataset_select == '1':
         image_path = IMAGE_09260005
         pc_path = PC_09260005_64
-
     elif dataset_select == '2':
         image_path = IMAGE_09260005
         pc_path = PC_09260005_16
-    
     elif dataset_select == '3':
         image_path = IMAGE_KITTI_RAW
+        pc_path = None
 
-
-    print("======================================")    
+    print("======================================")
     print("请选择发布方式:")
     print("1. 自动顺序发布Image, PointCloud")
     print("2. 手动顺序发布Image, PointCloud")
@@ -207,26 +172,10 @@ if __name__ == '__main__':
     function_select = raw_input("Enter: ")
 
     if function_select == '1':
-        auto_image_pointcloud_pub(image_path, pc_path)
+        publish_data(image_path, pc_path, auto_mode=True)
     elif function_select == '2':
-        manual_image_pointcloud_pub(image_path, pc_path)
+        publish_data(image_path, pc_path, auto_mode=False)
     elif function_select == '3':
         manual_image_pub(image_path)
     elif function_select == '4':
         manual_pointcloud_pub(pc_path)
-
-
-
-
-#             _              _       _        _               _              _              _              _   
-#            /\ \          /\_\    /\_\     / /\            /\ \           /\ \           /\ \           /\_\ 
-#           /  \ \        / / /   / / /    / /  \           \_\ \         /  \ \         /  \ \         / / /  
-#          / /\ \ \      / / /   / / /    / / /\ \          /\__ \       / /\ \ \       / /\ \ \       / / / 
-#         / / /\ \_\    / / /   / / /    / / /\ \ \        / /_ \ \     / / /\ \ \     / / /\ \ \     / / / 
-#        / / /_/ / /   / / /   / / /    / / /\ \_\ \      / / /\ \ \   / / /  \ \_\   / / /  \ \_\   / / /      
-#       / / /__\/ /   / / /   / / /    / / /\ \ \___\    / / /  \/_/  / / /   / / /  / / /   / / /  / / /       
-#      / / /_____/   / / /   / / /    / / /  \ \ \__/   / / /        / / /   / / /  / / /   / / /  / / / ____   
-#     / / /         / / /___/ / /    / / /____\_\ \    / / /        / / /___/ / /  / / /___/ / /  / /_/_/ ___/\ 
-#    / / /         / / /____\/ /    / / /__________\  /_/ /        / / /____\/ /  / / /____\/ /  /_______/\__\/ 
-#    \/_/          \/_________/     \/_____________/  \_\/         \/_________/   \/_________/   \_______\/
-
