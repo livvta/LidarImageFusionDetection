@@ -36,7 +36,7 @@ device = 'cuda:0'
 rviz_visualization = True
 
 # 设置置信度阈值（仅对可视化有效)
-pp_confidence_threshold = 0.1
+pp_confidence_threshold = 0.4
 
 
 class PointPillarsNode:
@@ -44,11 +44,11 @@ class PointPillarsNode:
         # 初始化模型
         self.model = init_model(config_file, checkpoint_file, device=device)
 
-        # 初始化ros节点, 节点名称为pointpillars_node
+        # 初始化pointpillars_node节点
         rospy.init_node('pointpillars_node', anonymous=False)
 
-        # 订阅velodyne_points话题, 消息类型为PointCloud2
-        self.pointcloud_sub = rospy.Subscriber('velodyne_points', PointCloud2, self.pointcloud_callback, queue_size=1)
+        # 订阅processed_points话题, 消息类型为PointCloud2
+        self.pointcloud_sub = rospy.Subscriber('processed_points', PointCloud2, self.pointcloud_callback, queue_size=1)
 
         # 创建pp_visualization话题, 消息类型为BoundingBoxArray, 用于rviz可视化检测结果
         self.pp_visualization_pub = rospy.Publisher('pp_visualization', BoundingBoxArray, queue_size=10)
@@ -83,7 +83,7 @@ class PointPillarsNode:
     def convert_pointcloud2(self, pcl_msg):
         """
         将PointCloud2点云数据转换为模型输入格式, 并进行ROI过滤
-        @param pcl_msg      PointCloud2
+        @param pcl_msg:     PointCloud2
         @return:            np.ndarray  [N, 4]
         """
         pcl_data = pc2.read_points(pcl_msg, skip_nans=True, field_names=("x", "y", "z", "intensity"))
@@ -95,7 +95,7 @@ class PointPillarsNode:
     def pointpillars_detect(self, pcd):
         '''
         使用PointPillars模型进行点云检测
-        @param pcd      np.ndarray  [N, 4]
+        @param pcd:     np.ndarray  [N, 4]
         @return:        Det3DDataSample    原始检测结果
         '''
         results, _ = inference_detector(self.model, pcd)
@@ -106,7 +106,7 @@ class PointPillarsNode:
     def process_results(self, results_mmdet3d):
         '''
         处理检测结果, 提取3D边界框、标签和置信度得分
-        @param results_mmdet3d      Det3DDataSample
+        @param results_mmdet3d:     Det3DDataSample
         @return:    tuple    (labels_3d, scores_3d, bboxes_3d, box_type_3d)
                     labels_3d    np.ndarray   [N]
                     scores_3d    np.ndarray   [N]
@@ -163,18 +163,16 @@ class PointPillarsNode:
         filtered_scores_3d = scores_3d[valid_indices]
 
         for i in range(len(filtered_labels_3d)):
-            bbox = BoundingBox()
-            bbox.header.stamp = current_time
-            bbox.header.frame_id = "velodyne"
-
             # 解析边界框参数
             x, y, z, length, width, height, rotation = filtered_bboxes_3d[i]
-
-            # 计算四元数
             qx = 0.0
             qy = 0.0
             qz = math.sin(rotation / 2)
-            qw = math.cos(rotation / 2)            
+            qw = math.cos(rotation / 2) # 计算四元数 
+
+            bbox = BoundingBox()
+            bbox.header.stamp = current_time
+            bbox.header.frame_id = "velodyne"
 
             bbox.pose.position.x = x
             bbox.pose.position.y = y
@@ -192,7 +190,6 @@ class PointPillarsNode:
             bbox.value = filtered_scores_3d[i]
             bbox.label = filtered_labels_3d[i]
 
-            # 添加bbox到bbox_array
             bbox_array.boxes.append(bbox)
 
         self.pp_visualization_pub.publish(bbox_array)

@@ -72,7 +72,7 @@ def downsample_pointcloud(points, beam_end_indices):
     @return: np.array [M, 4] 下采样后的点云数据
     """
     selected_points = []
-    for i in range(0, len(beam_end_indices), 4):
+    for i in range(0, len(beam_end_indices) - 1, 4):
         start_idx = beam_end_indices[i]
         end_idx = beam_end_indices[i + 1]
         selected_points.extend(points[start_idx:end_idx])
@@ -101,6 +101,6 @@ def process_folder(input_folder, output_folder):
 
 
 if __name__ == "__main__":
-    input_folder = 'c:/Users/livvta/OneDrive/EDU/graduation_project/detection_ws/src/pointpillars_ros/scripts/downsampling/data'
-    output_folder = 'c:/Users/livvta/OneDrive/EDU/graduation_project/detection_ws/src/pointpillars_ros/scripts/downsampling/data_output'
+    input_folder = '/home/harris/dataset/RawData/2011_09_26/2011_09_26_drive_0005_sync/velodyne_points/data'
+    output_folder = '/home/harris/dataset/RawData/downsampled_RawData'
     process_folder(input_folder, output_folder)

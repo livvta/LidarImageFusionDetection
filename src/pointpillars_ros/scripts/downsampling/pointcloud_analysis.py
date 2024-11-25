@@ -41,8 +41,7 @@ def analyze_pointcloud_data(data):
 
 if __name__ == "__main__":
     file_paths = [
-        'c:/Users/livvta/OneDrive/EDU/graduation_project/detection_ws/src/pointpillars_ros/scripts/downsampling/data_output/000001.bin',
-        'c:/Users/livvta/OneDrive/EDU/graduation_project/detection_ws/src/pointpillars_ros/scripts/downsampling/data/000000.bin'
+        '/home/harris/detection_ws/src/pointpillars_ros/scripts/downsampling/data_output/000000.bin'
     ]
     for file_path in file_paths:
         point_cloud = read_bin_file(file_path)

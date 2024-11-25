@@ -21,6 +21,7 @@ import sensor_msgs.point_cloud2 as pcl2
 from cv_bridge import CvBridge
 
 DATA_PATH = '/home/harris/dataset/RawData/2011_09_26/2011_09_26_drive_0005_sync/'
+# DATA_PATH = '/home/harris/dataset/RawData/downsampled_RawData'
 
 if  __name__ == "__main__":
     frame = 0
@@ -40,7 +41,7 @@ if  __name__ == "__main__":
         # img_msg.header.stamp = rospy.Time.now()
         cam_pub.publish(img_msg)
 
-        point_cloud = np.fromfile(os.path.join(DATA_PATH, 'velodyne_points/data/%010d.bin'%frame),dtype=np.float32).reshape(-1,4)
+        point_cloud = np.fromfile(os.path.join(DATA_PATH, 'velodyne_points/d_data/%010d.bin'%frame),dtype=np.float32).reshape(-1,4)
         header = Header()
         header.stamp = rospy.Time.now()
         header.frame_id = 'velodyne'

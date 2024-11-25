@@ -34,7 +34,7 @@ class FusionVisualization:
         self.pointcloud_sub = rospy.Subscriber('processed_points', PointCloud2, self.pointcloud_callback)
 
         # 订阅kitti_cam话题，消息类型为Image   
-        self.image_sub = rospy.Subscriber('kitti_cam', Image, self.image_callback)
+        self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
 
         # 初始化变量
         self.cv_image = None

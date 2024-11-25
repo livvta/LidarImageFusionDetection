@@ -5,8 +5,8 @@
 yolov5_node
 ================
 
-Version: 2.2.1
-Last Modified: 2024-11-15 13:44
+Version: 2.2.2
+Last Modified: 2024-11-24 13:44
 
 更新日志: 
 11.05: 将YOLODetection消息类型更新为BoundingBox2DArray
@@ -43,7 +43,7 @@ class YoloV5Node:
         rospy.init_node('yolov5_node', anonymous=False)
         
         # 订阅图像话题, 消息类型为Image
-        self.image_sub = rospy.Subscriber("kitti_cam", Image, self.image_callback)
+        self.image_sub = rospy.Subscriber("/camera/image_raw", Image, self.image_callback)
         
         # 创建yolo_detections话题, 消息类型为BoundingBox2DArray, 用于发布检测结果
         self.yolo_detection_pub = rospy.Publisher('yolo_detections', BoundingBox2DArray, queue_size=10)
@@ -72,8 +72,8 @@ class YoloV5Node:
     def imgmsg_to_cv2(self, img_msg):
         '''
         将ROS Image消息转换为OpenCV格式
-        @param img_msg      ROS Image消息
-        @return:            np.ndarray  OpenCV格式图像
+        @param img_msg:      ROS Image消息
+        @return:             np.ndarray  OpenCV格式图像
         ''' 
         # 检查图像编码格式
         if img_msg.encoding != "bgr8":
@@ -95,8 +95,8 @@ class YoloV5Node:
     def draw_detections(self, image, results):
         '''
         绘制YOLO检测结果
-        @param image    np.ndarray  OpenCV格式图像
-        @param results  Det2DDataSample  YOLO检测结果
+        @param image:       np.ndarray  OpenCV格式图像
+        @param results:     Det2DDataSample  YOLO检测结果
         '''
         # 复制原图像
         image_copy = image.copy()
@@ -140,18 +140,29 @@ class YoloV5Node:
     def publish_results(self, results):
         '''
         以BoundingBox2DArray消息类型发布YOLO检测结果
-        @param results  Det2DDataSample  YOLO检测结果
+        @param results:     Det2DDataSample  YOLO检测结果
+        ----------------------------------------------
+        BoundingBox2DArray消息类型定义如下:
+        Header header
+        BoundingBox2D[] boxes
+        ----------------------------------------------
+        BoundingBox2D消息类型定义如下:
+        float32 x_min // 左上角x坐标
+        float32 y_min // 左上角y坐标
+        float32 x_max // 右下角x坐标
+        float32 y_max // 右下角y坐标
+        float32 value // 置信度
+        uint32 label  // 标签
         '''
         bbox2d_array = BoundingBox2DArray()
         bbox2d_array.header.stamp = rospy.Time.now()
         bbox2d_array.header.frame_id = "camera_link" 
 
         for *xyxy, conf, cls in results.xyxy[0]:
-            bbox2d = BoundingBox2D()
-            
-            # 解析边界框参数
+            # 解析边界框参数           
             x_min, y_min, x_max, y_max = xyxy
 
+            bbox2d = BoundingBox2D()
             bbox2d.x_min = float(x_min)
             bbox2d.y_min = float(y_min)
             bbox2d.x_max = float(x_max)
@@ -159,7 +170,6 @@ class YoloV5Node:
             bbox2d.value = float(conf)
             bbox2d.label = int(cls)
             
-            # 添加bbox2d到bbox2d_array
             bbox2d_array.boxes.append(bbox2d)
 
         self.yolo_detection_pub.publish(bbox2d_array)
