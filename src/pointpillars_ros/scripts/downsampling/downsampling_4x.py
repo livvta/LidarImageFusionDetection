@@ -4,8 +4,8 @@
 '''
 downsampling_4x.py
 ==================
-Version: 1.0
-Last Modified: 2024-11-17 23:46
+Version: 1.1
+Last Modified: 2024-11-26 16:46
 
 功能：
 - 根据激光雷达的线束特性, 对点云数据进行4倍下采样
@@ -88,7 +88,8 @@ def process_folder(input_folder, output_folder):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
-    for file_name in os.listdir(input_folder):
+    file_names = sorted(os.listdir(input_folder))  # 按文件名称排序
+    for file_name in file_names:
         if file_name.endswith('.bin'):
             input_file_path = os.path.join(input_folder, file_name)
             output_file_path = os.path.join(output_folder, file_name)
@@ -101,6 +102,6 @@ def process_folder(input_folder, output_folder):
 
 
 if __name__ == "__main__":
-    input_folder = '/home/harris/dataset/RawData/2011_09_26/2011_09_26_drive_0005_sync/velodyne_points/data'
-    output_folder = '/home/harris/dataset/RawData/downsampled_RawData'
+    input_folder = '/media/harris/PM981/data_object_velodyne/testing/velodyne'
+    output_folder = '/media/harris/PM981/data_object_velodyne/testing/velodyne_16'
     process_folder(input_folder, output_folder)
