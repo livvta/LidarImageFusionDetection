@@ -27,16 +27,20 @@ import sensor_msgs.point_cloud2 as pc2
 from std_msgs.msg import String
 from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
 
-# 模型配置信息
+# 基于KITTI训练的模型
 config_file = '/home/harris/model/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class1/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class1.py'
 checkpoint_file = '/home/harris/model/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class1/epoch_80.pth'
+
+# 基于KITTI_16训练的模型
+# config_file = '/home/harris/model/pointpillars_my_config_hv_secfpn/pointpillars_my_config_hv_secfpn.py'
+# checkpoint_file = '/home/harris/model/pointpillars_my_config_hv_secfpn/epoch_80.pth'
 device = 'cuda:0'
 
 # 是否启用可视化功能
 rviz_visualization = True
 
 # 设置置信度阈值（仅对可视化有效)
-pp_confidence_threshold = 0.4
+pp_confidence_threshold = 0.1
 
 
 class PointPillarsNode:
@@ -49,6 +53,9 @@ class PointPillarsNode:
 
         # 订阅processed_points话题, 消息类型为PointCloud2
         self.pointcloud_sub = rospy.Subscriber('processed_points', PointCloud2, self.pointcloud_callback, queue_size=1)
+
+        # 订阅velodyne_points话题, 消息类型为PointCloud2 (原始点云, only for test)
+        # self.pointcloud_sub = rospy.Subscriber('velodyne_points', PointCloud2, self.pointcloud_callback, queue_size=1)
 
         # 创建pp_visualization话题, 消息类型为BoundingBoxArray, 用于rviz可视化检测结果
         self.pp_visualization_pub = rospy.Publisher('pp_visualization', BoundingBoxArray, queue_size=10)
