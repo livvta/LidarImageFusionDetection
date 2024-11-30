@@ -21,6 +21,7 @@ def analyze_pointcloud_data(data):
     hori_angle = np.arctan2(data[:,0], data[:,1]) / np.pi * 180  # 计算方位角
     elev_angle = np.arctan2(data[:,2], np.sqrt(data[:,0]**2 + data[:,1]**2)) / np.pi * 180  # 计算高度角
 
+    plt.rcParams['figure.dpi'] = 130  # 设置分辨率
     plt.figure()
     plt.subplot(2, 1, 1)
     plt.plot(hori_angle)
