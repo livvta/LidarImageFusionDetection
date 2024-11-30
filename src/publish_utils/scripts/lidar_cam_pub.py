@@ -5,22 +5,19 @@
 lidar_cam_pub
 ================
 
-Version: 1.1.0
-Last Modified: 2024-11-22 15:35
+Version: 2.0
+Last Modified: 2024-11-28 21:04
 
 由于受计算平台检测性能限制, 无法做到信息实时检测(rate = 10)
 因此，本程序目的在于同步激光雷达点云与图像消息，并对发布频率进行控制。
 
 此程序功能：
 1. 接收来自Velodyne VLP-16激光雷达点云消息, 过滤掉无效点云, 通过ros发布PointCloud2消息。
-2. 接收来自摄像头的图像信息, 并通过ros发布Image消息。
 '''
 
-import cv2
 import rospy
 import numpy as np
 import math
-from cv_bridge import CvBridge
 from sensor_msgs.msg  import PointCloud2, PointField
 from sensor_msgs.msg import Image
 from std_msgs.msg import Header
@@ -28,7 +25,7 @@ from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 import sensor_msgs.point_cloud2 as pc2
 
-PUB_IMAGE = False
+PUB_IMAGE = True
 
 
 class LidarCamPub:
@@ -36,38 +33,30 @@ class LidarCamPub:
         # 初始化ros节点，节点名称为pointpillars_node
         rospy.init_node('lidar_cam_pub', anonymous=False)
    
-        # 订阅velodyne_points话题，消息类型为PointCloud2
+        # 点云消息订阅与发布
         self.pointcloud_sub = rospy.Subscriber('velodyne_points', PointCloud2, self.callback, queue_size=10)
-
-        if PUB_IMAGE:
-            # 创建/camera/image_raw话题，消息类型为Image，发布摄像头图像
-            self.image_pub = rospy.Publisher('/camera/image_raw', Image, queue_size=2)
-
-        # 创建processed_points话题，消息类型为PointCloud2，发布ROI处理后的点云
         self.processed_pointcloud_pub = rospy.Publisher('processed_points', PointCloud2, queue_size=10)
 
-        # 创建angle_boundaries话题，消息类型为Marker，用于可视化检测范围
-        self.marker_pub = rospy.Publisher('angle_boundaries', Marker, queue_size=10)        
+        # 图像消息订阅与发布
+        if PUB_IMAGE:
+            self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback, queue_size=10)
+            self.synced_image_pub = rospy.Publisher('synced_image', Image, queue_size=2)
 
-        # 初始化marker信息
+        # angle_boundaries话题，消息类型为Marker，用于可视化检测范围
+        self.marker_pub = rospy.Publisher('angle_boundaries', Marker, queue_size=10)        
         self.marker = self.create_angle_boundaries()
 
-        # 初始化计数器
         self.callback_count = 0 
+        self.img_msg = None
 
+    def image_callback(self, img_msg):
+        self.img_msg = img_msg
 
     def callback(self, pcl_msg):
         self.callback_count += 1
 
-        if self.callback_count >= 2: # 每10条消息处理一次  10Hz -> 2Hz
+        if self.callback_count >= 5: # 每5条消息处理一次  10Hz -> 2Hz
             self.callback_count = 0
-
-            if PUB_IMAGE:
-                # 读取摄像头图像
-                ret, frame = cv2.VideoCapture(0).read()
-                if not ret:
-                    rospy.logerr("Failed to read image from camera.")
-                    return
 
             # 进行点云处理
             processed_points = self.convert_pointcloud2(pcl_msg)
@@ -76,14 +65,12 @@ class LidarCamPub:
             self.publish_processed_pointcloud(processed_points)
 
             if PUB_IMAGE:
-                #resize image             尺寸待定！！！
-                # frame = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_LINEAR)
-
-                # 将图像转换为ROS消息
-                image_msg = CvBridge().cv2_to_imgmsg(frame, encoding="bgr8")
+                if self.img_msg is None:
+                    rospy.logerr("No image message received.")
+                    return
 
                 # 发布图像
-                self.image_pub.publish(image_msg)
+                self.synced_image_pub.publish(self.img_msg)
 
             # 发布 Marker
             self.marker.header.stamp = rospy.Time.now()
