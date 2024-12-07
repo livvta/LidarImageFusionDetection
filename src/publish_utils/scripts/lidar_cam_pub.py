@@ -108,8 +108,11 @@ class LidarCamPub:
         # 提前x坐标
         x_offset = x - 1
 
-        # 过滤点：只保留前方并在角度限制内的点
-        mask = (x > 1) & (y >= -x_offset * right_tan) & (y <= x_offset * left_tan)
+        # 限制x坐标距离
+        x_distance_limit = 30
+
+        # 过滤点：只保留前方并在角度限制内且x坐标在距离限制内的点
+        mask = (x > 1) & (x < x_distance_limit) & (y >= -x_offset * right_tan) & (y <= x_offset * left_tan)
 
         # 应用掩膜过滤点并返回
         points = np.column_stack((x[mask], y[mask], z[mask], i[mask]))
