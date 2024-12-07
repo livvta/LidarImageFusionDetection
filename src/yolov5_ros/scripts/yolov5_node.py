@@ -43,7 +43,7 @@ class YoloV5Node:
         rospy.init_node('yolov5_node', anonymous=False)
         
         # 订阅图像话题, 消息类型为Image
-        self.image_sub = rospy.Subscriber("/camera/image_raw", Image, self.image_callback)
+        self.image_sub = rospy.Subscriber("synced_image", Image, self.image_callback)
         
         # 创建yolo_detections话题, 消息类型为BoundingBox2DArray, 用于发布检测结果
         self.yolo_detection_pub = rospy.Publisher('yolo_detections', BoundingBox2DArray, queue_size=10)
@@ -141,18 +141,18 @@ class YoloV5Node:
         '''
         以BoundingBox2DArray消息类型发布YOLO检测结果
         @param results:     Det2DDataSample  YOLO检测结果
-        ----------------------------------------------
-        BoundingBox2DArray消息类型定义如下:
-        Header header
-        BoundingBox2D[] boxes
-        ----------------------------------------------
-        BoundingBox2D消息类型定义如下:
+        -------------------------------------------------
+        yolov5_ros.msg/BoundingBox2D.msg
         float32 x_min // 左上角x坐标
         float32 y_min // 左上角y坐标
         float32 x_max // 右下角x坐标
         float32 y_max // 右下角y坐标
         float32 value // 置信度
-        uint32 label  // 标签
+        uint32 label  // 类别
+        -------------------------------------------------
+        yolov5_ros.msg/BoundingBox2DArray.msg
+        Header header // ROS消息头
+        BoundingBox2D[] boxes
         '''
         bbox2d_array = BoundingBox2DArray()
         bbox2d_array.header.stamp = rospy.Time.now()
