@@ -16,6 +16,7 @@ import open3d as o3d
 import matplotlib.pyplot as plt
 import open3d.core as o3c
 from sensor_msgs.msg import PointCloud2, Image
+from yolov5_ros.msg import BoundingBox2DArray
 from fusion_utils import read_calib, imgmsg_to_cv2, process_points
 
 
@@ -33,8 +34,10 @@ class FusionVisualization:
         # 订阅processed_points话题，消息类型为PointCloud2
         self.pointcloud_sub = rospy.Subscriber('processed_points', PointCloud2, self.pointcloud_callback)
 
-        # 订阅kitti_cam话题，消息类型为Image   
-        self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
+        # 订阅synced_image话题，消息类型为Image   
+        self.image_sub = rospy.Subscriber('synced_image', Image, self.image_callback)
+
+        self.detection_sub = rospy.Subscriber('fusion_results', BoundingBox2DArray, self.detection_callback)
 
         # 初始化变量
         self.cv_image = None
@@ -56,11 +59,13 @@ class FusionVisualization:
         # 解析点云消息
         self.points = process_points(pcl_msg)
 
+
+    def detection_callback(self, msg):
         if self.cv_image is not None:
-            self.fuse_and_display()
+            self.fuse_and_display(msg)        
 
 
-    def fuse_and_display(self):
+    def fuse_and_display(self, msg):
         # 三维点云投影生成深度图
         self.depth = self.points_to_depth(self.points, self.height, self.width, intrinsic, extrinsic)
 
@@ -71,12 +76,64 @@ class FusionVisualization:
         fusion_image = self.blend_images(self.cv_image, colored_depth)
 
         # 绘制检测结果
-        self.draw_detection(fusion_image)
+        self.draw_detection(msg, fusion_image)
 
 
-    def draw_detection(self, fusion_image):
-        # 显示融合后的图像
-        cv2.imshow('Fused Image', fusion_image)
+    def draw_detection(self, msg, fusion_image):
+        image = fusion_image
+        
+        # 定义颜色常量
+        RED = (0, 0, 255)   # 红色
+        GREEN = (0, 190, 0)   # 绿色
+
+        # 定义标签文字
+        LABELS = {
+            0: 'Pedestrian',
+            1: 'Cyclist',
+            2: 'Car'
+        }
+
+        for box in msg.boxes:
+            # 获取框的坐标
+            x_min = int(box.x_min)
+            y_min = int(box.y_min)
+            x_max = int(box.x_max)
+            y_max = int(box.y_max)
+
+            # 获取标签、置信度和模型
+            label = box.label
+            confidence = box.value
+            model = box.model
+
+            font = cv2.FONT_HERSHEY_SIMPLEX # 字体
+            thickness = 1       # 标签字体粗细
+            font_size = 0.5     # 标签字号
+
+            # 根据 model 值选择颜色
+            if model == 0:
+                color = GREEN
+            elif model == 1:
+                color = RED
+
+            # 绘制矩形框
+            cv2.rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
+
+            # 获取标签文本
+            label_text = f"{LABELS.get(label)}, {confidence:.2f}"
+
+            # 绘制标签背景
+            label_size = cv2.getTextSize(label_text, font, font_size, thickness)[0]
+            label_w, label_h = label_size
+            label_x = x_min - 1
+            label_y = y_min - label_h - 1
+            cv2.rectangle(image, (label_x, label_y), (label_x + label_w, label_y + label_h), color, -1)
+
+            # 在框上方绘制标签文本和置信度
+            cv2.putText(image, label_text, 
+                        (x_min, y_min - 2), font, font_size, (255, 255, 255), thickness)
+
+        # 显示图片
+        cv2.imshow("Detections", image)
         cv2.waitKey(1)
 
 
