@@ -5,8 +5,8 @@
 yolov5_node
 ================
 
-Version: 2.2.2
-Last Modified: 2024-11-24 13:44
+Version: 2.3
+Last Modified: 2024-12-28
 
 更新日志: 
 11.05: 将YOLODetection消息类型更新为BoundingBox2DArray
@@ -28,11 +28,16 @@ path = '/home/harris/model/yolov5/runs/train/exp7/weights/best.pt'
 source = 'local'
 
 # 是否启用可视化功能
-cv2_visualization = True
+rviz_visualization = True
 
 # 设置置信度阈值（仅对可视化有效)
 yolo_confidence_threshold = 0.5
 
+# 1, 2标签互换
+label_map = {1: 2, 2: 1}
+# 0: pedestrian
+# 1: cyclist
+# 2: car
 
 class YoloV5Node:
     def __init__(self):
@@ -45,9 +50,11 @@ class YoloV5Node:
         # 订阅图像话题, 消息类型为Image
         self.image_sub = rospy.Subscriber("synced_image", Image, self.image_callback)
         
-        # 创建yolo_detections话题, 消息类型为BoundingBox2DArray, 用于发布检测结果
-        self.yolo_detection_pub = rospy.Publisher('yolo_detections', BoundingBox2DArray, queue_size=10)
+        # 创建yolo_results话题, 消息类型为BoundingBox2DArray, 用于发布检测结果
+        self.yolo_detection_pub = rospy.Publisher('yolo_results', BoundingBox2DArray, queue_size=10)
 
+        # 创建yolo_visualization话题，消息类型Image，用于在rviz中可视化检测结果
+        self.yolo_visualization_pub = rospy.Publisher('yolo_visualization', Image, queue_size=10)
 
     def image_callback(self, msg):
         try:
@@ -61,9 +68,11 @@ class YoloV5Node:
             self.publish_results(results)
 
             # 可视化YOLO检测结果
-            if cv2_visualization:
-                self.draw_detections(cv_image, results)
-          
+            if rviz_visualization:
+                image_copy = self.draw_detections(cv_image, results)
+                img_msg = self.cv2_to_imgmsg(image_copy)
+                self.yolo_visualization_pub.publish(img_msg)
+
         except Exception as e:
             rospy.logerr("YoloV5Node error: %s", e)
             return
@@ -92,6 +101,22 @@ class YoloV5Node:
         return image_opencv
 
 
+    def cv2_to_imgmsg(self, cv_image):
+        '''
+        将OpenCV格式图像转换为ROS Image消息
+        @param cv_image     np.ndarray  OpenCV格式图像
+        @return:            ROS Image消息
+        '''
+        img_msg = Image()
+        img_msg.height = cv_image.shape[0]
+        img_msg.width = cv_image.shape[1]
+        img_msg.encoding = "bgr8"
+        img_msg.is_bigendian = 0
+        img_msg.data = cv_image.tobytes()
+        img_msg.step = len(img_msg.data) // img_msg.height
+        return img_msg
+
+
     def draw_detections(self, image, results):
         '''
         绘制YOLO检测结果
@@ -102,11 +127,11 @@ class YoloV5Node:
         image_copy = image.copy()
 
         colors = [
-            (255, 0, 0),    # 红色
-            (0, 190, 0),    # 深绿色
-            (0, 0, 255),    # 蓝色
+            (0, 150, 180),    # 黄色, pedestrian
+            (255, 0, 0),      # 蓝色, car
+            (158, 0, 150),    # 紫色, cyclist
         ]
-        font = cv2.FONT_HERSHEY_SIMPLEX # 字体        
+        font = cv2.FONT_HERSHEY_SIMPLEX # 字体
         thickness = 1       # 标签字体粗细
         font_size = 0.5     # 标签字号
 
@@ -133,9 +158,9 @@ class YoloV5Node:
             # 绘制文字标签
             cv2.putText(image_copy, label, (x_min, y_min - 2), font, font_size, (255, 255, 255), thickness)
 
-        cv2.imshow('YOLOv5 Detection', image_copy)
-        cv2.waitKey(1)
-
+        # cv2.imshow('YOLOv5 Detection', image_copy)
+        # cv2.waitKey(1)
+        return image_copy
 
     def publish_results(self, results):
         '''
@@ -156,11 +181,12 @@ class YoloV5Node:
         '''
         bbox2d_array = BoundingBox2DArray()
         bbox2d_array.header.stamp = rospy.Time.now()
-        bbox2d_array.header.frame_id = "camera_link" 
+        bbox2d_array.header.frame_id = "camera_link"
 
         for *xyxy, conf, cls in results.xyxy[0]:
             # 解析边界框参数           
             x_min, y_min, x_max, y_max = xyxy
+            label = label_map.get(int(cls), int(cls)) # 使用字典映射
 
             bbox2d = BoundingBox2D()
             bbox2d.x_min = float(x_min)
@@ -168,11 +194,14 @@ class YoloV5Node:
             bbox2d.x_max = float(x_max)
             bbox2d.y_max = float(y_max)
             bbox2d.value = float(conf)
-            bbox2d.label = int(cls)
+            bbox2d.label = label
+            bbox2d.model = 0
             
             bbox2d_array.boxes.append(bbox2d)
 
         self.yolo_detection_pub.publish(bbox2d_array)
+
+
 
 
 if __name__ == '__main__':

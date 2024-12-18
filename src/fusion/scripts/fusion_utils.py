@@ -53,33 +53,4 @@ def process_points(pcl_msg):
 
     return pcl_array
 
-# # 将3d框投影到2d平面上
-# def project_bounding_boxes(self, bounding_boxes, K, lidar_to_camera, imu_to_lidar):
-#     projected_boxes = []
-    
-#     for box in bounding_boxes:
-#         # 从字典中获取中心位置和尺寸
-#         position = box['position']
-#         dimensions = box['dimensions']
-        
-#         # 计算 3D 边界框的八个顶点
-#         corners = self.get_box_corners(position, dimensions)
-        
-#         # 将点从激光雷达坐标系转换到相机坐标系
-#         corners_homogeneous = np.hstack((corners, np.ones((corners.shape[0], 1))))
-#         transformed_corners = (lidar_to_camera @ (imu_to_lidar @ corners_homogeneous.T)).T
-        
-#         # 投影到 2D 平面
-#         projected_corners = (K @ transformed_corners.T).T
-#         projected_corners /= projected_corners[:, 2].reshape(-1, 1)  # 归一化
-        
-#         # print(projected_corners)
-
-#         # 找到 2D 边界框的最小和最大坐标
-#         u_min, u_max = np.min(projected_corners[:, 0]), np.max(projected_corners[:, 0])
-#         v_min, v_max = np.min(projected_corners[:, 1]), np.max(projected_corners[:, 1])
-        
-#         projected_boxes.append((u_min, v_min, u_max, v_max))
-    
-#     return projected_boxes
 

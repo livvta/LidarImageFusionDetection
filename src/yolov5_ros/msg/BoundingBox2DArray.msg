@@ -1,3 +1,3 @@
-# BoundingBox2DArray is a list of BoundingBox2D.
+# BoundingBox2DArray.msg
 Header header
 BoundingBox2D[] boxes

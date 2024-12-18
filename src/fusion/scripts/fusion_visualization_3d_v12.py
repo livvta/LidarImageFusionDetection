@@ -5,8 +5,8 @@
 fusion_visualization_3d
 ================
 
-Version: 1.2
-Last Modified: 2024-11-09 00:47
+Version: 1.2.1
+Last Modified: 2024-12-18
 
 ToDo:
 1.传递参数命名不规范
@@ -48,7 +48,7 @@ class FusionVisualization:
         rospy.init_node('fusion_visualization', anonymous=False)
 
         # 订阅image话题，消息类型为Image   
-        self.image_sub = rospy.Subscriber('kitti_cam', Image, self.image_callback)
+        self.image_sub = rospy.Subscriber('synced_image', Image, self.image_callback)
 
         # 接受pp_results话题，消息类型为String
         self.pp_results_sub = rospy.Subscriber('pp_results', String, self.ppdetection_callback)

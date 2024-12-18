@@ -27,9 +27,13 @@ import sensor_msgs.point_cloud2 as pc2
 from std_msgs.msg import String
 from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
 
-# 基于KITTI训练的模型
-config_file = '/home/harris/model/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class1/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class1.py'
-checkpoint_file = '/home/harris/model/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class1/epoch_80.pth'
+# 基于KITTI训练的模型, batch_size = 4
+# config_file = '/home/harris/model/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class1/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class1.py'
+# checkpoint_file = '/home/harris/model/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class1/epoch_80.pth'
+
+# 基于KITTI训练的模型, batch_size = 6
+config_file = '/home/harris/model/mmdetection3d/work_dirs/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class/config.py'
+checkpoint_file = '/home/harris/model/mmdetection3d/work_dirs/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class.pth'
 
 # 基于KITTI_16训练的模型
 # config_file = '/home/harris/model/pointpillars_my_config_hv_secfpn/pointpillars_my_config_hv_secfpn.py'
@@ -40,7 +44,7 @@ device = 'cuda:0'
 rviz_visualization = True
 
 # 设置置信度阈值（仅对可视化有效)
-pp_confidence_threshold = 0.1
+pp_confidence_threshold = 0.3
 
 
 class PointPillarsNode:
