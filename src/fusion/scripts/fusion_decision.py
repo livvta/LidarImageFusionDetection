@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # encoding=utf-8
 
-'''
+"""
 fusion_decision
 ================
 
 Version: 1.1
 Last Modified: 2024-12-18
-'''
+"""
 
 import rospy
 import json
@@ -16,10 +16,9 @@ from std_msgs.msg import String
 from yolov5_ros.msg import BoundingBox2D, BoundingBox2DArray
 from fusion_utils import read_calib
 
-
 # 读取标定文件
-P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix = read_calib( )
-intrinsic = P2[:, :3] # Cam 2(color)
+P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix = read_calib()
+intrinsic = P2[:, :3]  # Cam 2(color)
 '''
                 [fx   0  cx]  
     intrinsic = [ 0  fy  cy]  fx, fy:相机焦距
@@ -32,26 +31,19 @@ extrinsic = np.matmul(R0, lidar2camera_matrix)
 '''
 
 # 置信度阈值 
-pp_confidence_threshold_fusion=0.38
+pp_confidence_threshold_fusion = 0.38
 yolo_confidence_threshold_fusion = 0.3
+
 
 class FusionDecision:
     def __init__(self):
-        # 初始化ros节点，节点名称为fusion_decision
         rospy.init_node('fusion_decision', anonymous=False)
-
-        # 接收pp_results话题，消息类型为String
         self.pp_results_sub = rospy.Subscriber('pp_results', String, self.pp_results_callback)
-
-        # 接收yolo_results_pub话题，消息类型为BoundingBox2DArray
         self.yolo_results_sub = rospy.Subscriber('yolo_results', BoundingBox2DArray, self.yolo_results_callback)
-        
-
         self.fusion_detection_pub = rospy.Publisher('fusion_results', BoundingBox2DArray, queue_size=10)
 
-
     def yolo_results_callback(self, yolo_results):
-        '''
+        """
         读取BoundingBox2DArray格式消息,将消息转换后准备送入iou计算
         @param yolo_results:      BoundingBox2DArray
         -------------------------------------------------
@@ -66,9 +58,8 @@ class FusionDecision:
         yolov5_ros.msg/BoundingBox2DArray.msg
         Header header // ROS消息头
         BoundingBox2D[] boxes
-        '''
+        """
         self.yolo_detection_bboxes = self.process_yolo_results(yolo_results)
-
 
     def pp_results_callback(self, pp_results):
         # if self.cv_image is not None:
@@ -95,7 +86,6 @@ class FusionDecision:
         print("\n============================")
         print("final_results", final_results)
         print("\n============================")
-
 
     def process_yolo_results(self, yolo_results):
         # Extract bounding boxes from the message
@@ -130,17 +120,16 @@ class FusionDecision:
 
         return detected_bboxes
 
-
     def load_pp_result(self, pp_results):
-        '''
+        """
         加载PointPillars检测结果
         @param pp_results:      std_msgs.msg String
         @return:    tuple    (labels_3d, scores_3d, bboxes_3d, box_type_3d)
                     labels_3d    np.ndarray   [N]
                     scores_3d    np.ndarray   [N]
                     bboxes_3d    np.ndarray   [N, 7]
-                    box_type_3d  str    
-        '''
+                    box_type_3d  str
+        """
         pp_results = json.loads(pp_results.data)
         
         labels_3d_list = pp_results.get("labels_3d", [])
@@ -151,49 +140,45 @@ class FusionDecision:
         labels_3d = np.array(labels_3d_list)
         scores_3d = np.array(scores_3d_list)
         bboxes_3d = np.array(bboxes_3d_list)
-
         return labels_3d, scores_3d, bboxes_3d, box_type_3d
 
-
     def bbox3d_center_to_corners(self, bboxes):
-        '''
+        """
         通过边界框的位置(底面中点)、尺寸、朝向角参数得到边界框的8个角点坐标
         box_3d: (x, y, z, x_size, y_size, z_size, yaw)
-        @param bboxes:      np.ndarray  [N, 7]  
+        @param bboxes:      np.ndarray  [N, 7]
         @return:            np.ndarray  [N, 8, 3]
 
                ^ z   x            6 ------ 5
                |   /             / |     / |
-               |  /             2 -|---- 1 |   
-        y      | /              |  |     | | 
+               |  /             2 -|---- 1 |
+        y      | /              |  |     | |
         <------|o               | 7 -----| 4
-                                |/   o   |/    
-                                3 ------ 0 
+                                |/   o   |/
+                                3 ------ 0
         x: front, y: left, z: top
-        '''
+        """
         centers, dims, angles = bboxes[:, :3], bboxes[:, 3:6], bboxes[:, 6]
         # 1. 生成边界框顶点坐标, 按照顺时针方向从最小点排列 （3, 0, 4， 7, 2, 1, 5, 6）   
-        bboxes_corners =np.array([[-0.5, 0.5, 0], [-0.5, -0.5, 0], [0.5, -0.5, 0], [0.5, 0.5, 0],
-                                  [-0.5, 0.5, 1.0],[-0.5, -0.5, 1.0], [0.5, -0.5, 1.0], [0.5, 0.5, 1.0]], 
+        bboxes_corners = np.array([[-0.5, 0.5, 0], [-0.5, -0.5, 0], [0.5, -0.5, 0], [0.5, 0.5, 0],
+                                  [-0.5, 0.5, 1.0], [-0.5, -0.5, 1.0], [0.5, -0.5, 1.0], [0.5, 0.5, 1.0]],
                                   dtype=np.float32)  
-        bboxes_corners = bboxes_corners[None, :, :] * dims[:, None, :] # [1, 8, 3] * [N, 1, 3] -> [N, 8, 3]
+        bboxes_corners = bboxes_corners[None, :, :] * dims[:, None, :]  # [1, 8, 3] * [N, 1, 3] -> [N, 8, 3]
     
         # 2. 绕z轴旋转边界框
-        rot_sin ,rot_cos = np.sin(angles),np.cos(angles)
-        ones ,zeros= np.ones_like(rot_cos), np.zeros_like(rot_cos) 
+        rot_sin, rot_cos = np.sin(angles), np.cos(angles)
+        ones, zeros = np.ones_like(rot_cos), np.zeros_like(rot_cos)
         rot_mat = np.array([[rot_cos, rot_sin, zeros],
                             [-rot_sin, rot_cos, zeros],
                             [zeros, zeros, ones]],  # 绕z轴旋转矩阵
-                            dtype=np.float32) # [3, 3, N]
+                            dtype=np.float32)  # [3, 3, N]
 
-        rot_mat = np.transpose(rot_mat, (2, 0, 1)) # [N, 3, 3]
-        bboxes_corners =  np.matmul(bboxes_corners,rot_mat) # [N, 8, 3]
+        rot_mat = np.transpose(rot_mat, (2, 0, 1))  # [N, 3, 3]
+        bboxes_corners = np.matmul(bboxes_corners, rot_mat)  # [N, 8, 3]
 
         # 3. 平移回原中心位置
         bboxes_corners += centers[:, None, :]
-    
         return bboxes_corners
-
 
     def project_3d_to_2d(self, all_corners, intrinsic, extrinsic):
         """
@@ -213,23 +198,21 @@ class FusionDecision:
         corners_3d_camera = np.matmul(all_corners_homogeneous, extrinsic.T)  # (X', Y', Z', 1)
 
         # 3. 将相机坐标系中的3D点投影到图像坐标系: [N, 8, 3] -> [N, 8, 3]
-        corners_2d_homogeneous = np.matmul(corners_3d_camera[:, :, :3], intrinsic.T) # (u, v, w)
+        corners_2d_homogeneous = np.matmul(corners_3d_camera[:, :, :3], intrinsic.T)  # (u, v, w)
 
         # 4. 将齐次坐标的归一化 (去除w分量): [N, 8, 3] -> [N, 8, 2]
         #    (u, v) = (u/w, v/w)
         corners_2d = corners_2d_homogeneous[:, :, :2] / corners_2d_homogeneous[:, :, 2:]  # (u, v)
-        
         return corners_2d
 
-
     def bboxes_3d_to_2d(self, projected_2d, scores_3d, labels_3d):
-        '''
+        """
         根据3D边界框八个角点坐标,转换为2D边界框
         @param projected_2d:   np.ndarray  [N, 8, 2]  边界框的8个角点坐标
         @param scores_3d:      np.ndarray  [N]        3D边界框的置信度
         @param labels_3d:      np.ndarray  [N]        3D边界框的类别
         @return:
-        '''
+        """
         # Prepare a list to store the bounding boxes
         pp_detected_bboxes = []
 
@@ -262,8 +245,8 @@ class FusionDecision:
 
         return pp_detected_bboxes
 
-
-    def iou(self, bbox1, bbox2):
+    @staticmethod
+    def iou(bbox1, bbox2):
         """计算两个边界框的IoU"""
         x1 = max(bbox1['x_min'], bbox2['x_min'])
         y1 = max(bbox1['y_min'], bbox2['y_min'])
@@ -276,7 +259,6 @@ class FusionDecision:
         bbox2_area = (bbox2['x_max'] - bbox2['x_min']) * (bbox2['y_max'] - bbox2['y_min'])
 
         union_area = bbox1_area + bbox2_area - intersection_area
-
         return intersection_area / union_area if union_area > 0 else 0
 
     def weighted_nms(self, bboxes, iou_threshold=0.5, yolo_weight=0.8, pp_weight=1.0):
@@ -306,7 +288,7 @@ class FusionDecision:
 
             remaining_bboxes = []
             for bbox in bboxes:
-                if best_bbox['label'] != bbox['label']: #不同类别不进行iou计算
+                if best_bbox['label'] != bbox['label']:  # 不同类别不进行iou计算
                     remaining_bboxes.append(bbox)
                     continue
 
@@ -346,8 +328,6 @@ class FusionDecision:
 
         self.fusion_detection_pub.publish(msg)
 
-
-
     # def iou(self, box1, box2):
     #     '''
     #     计算两个边界框的交并比（Intersection over Union, IoU）
@@ -366,7 +346,6 @@ class FusionDecision:
     #     iou = inter_area / float(box1_area + box2_area - inter_area)
 
     #     return iou
-    
 
     # # def non_max_suppression(fusion_boxes, fusion_scores, iou_threshold):
     # #     '''
@@ -378,7 +357,6 @@ class FusionDecision:
     # #     '''
     # #     if len(fusion_boxes) == 0:
     # #         return []
-
 
     # def fusion_decision(self, yolo_bboxes, pp_bboxes):
     #     '''
@@ -440,6 +418,7 @@ class FusionDecision:
     #     return keep_boxes
 
 # ...existing code...
+
 
 if __name__ == '__main__':
     try:

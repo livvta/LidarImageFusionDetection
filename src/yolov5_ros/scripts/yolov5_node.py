@@ -13,7 +13,6 @@ Last Modified: 2024-12-28
 11.08: 提高代码复用, 优化可视化效果
 '''
 
-
 import cv2
 import rospy
 import numpy as np
@@ -22,7 +21,7 @@ from sensor_msgs.msg import Image
 from yolov5_ros.msg import BoundingBox2D, BoundingBox2DArray
 
 # 模型配置信息
-dir = '/home/harris/model/yolov5'
+model_dir = '/home/harris/model/yolov5'
 model = 'custom'
 path = '/home/harris/model/yolov5/runs/train/exp7/weights/best.pt'
 source = 'local'
@@ -33,28 +32,20 @@ rviz_visualization = True
 # 设置置信度阈值（仅对可视化有效)
 yolo_confidence_threshold = 0.5
 
-# 1, 2标签互换
-label_map = {1: 2, 2: 1}
+# 标签映射 (1->2, 2->1)
 # 0: pedestrian
 # 1: cyclist
 # 2: car
+label_map = {1: 2, 2: 1}
+
 
 class YoloV5Node:
     def __init__(self):
-        # 初始化模型
-        self.yolov5_model = torch.hub.load(dir, model, path=path, source=source)
-
-        # 初始化 ROS 节点, 节点名称为yolov5_node
-        rospy.init_node('yolov5_node', anonymous=False)
-        
-        # 订阅图像话题, 消息类型为Image
-        self.image_sub = rospy.Subscriber("synced_image", Image, self.image_callback)
-        
-        # 创建yolo_results话题, 消息类型为BoundingBox2DArray, 用于发布检测结果
-        self.yolo_detection_pub = rospy.Publisher('yolo_results', BoundingBox2DArray, queue_size=10)
-
-        # 创建yolo_visualization话题，消息类型Image，用于在rviz中可视化检测结果
-        self.yolo_visualization_pub = rospy.Publisher('yolo_visualization', Image, queue_size=10)
+        self.yolov5_model = torch.hub.load(model_dir, model, path=path, source=source)  # 初始化模型
+        rospy.init_node('yolov5_node', anonymous=False)  # 初始化 ROS 节点
+        self.image_sub = rospy.Subscriber("synced_image", Image, self.image_callback)  # 订阅图像话题
+        self.yolo_results_pub = rospy.Publisher('yolo_results', BoundingBox2DArray, queue_size=10)  # 发布原始检测结果
+        self.yolo_visualization_pub = rospy.Publisher('yolo_visualization', Image, queue_size=10)  # rviz可视化检测结果
 
     def image_callback(self, msg):
         try:
@@ -67,9 +58,11 @@ class YoloV5Node:
             # 发布检测结果
             self.publish_results(results)
 
-            # 可视化YOLO检测结果
             if rviz_visualization:
+                # 绘制YOLO检测结果
                 image_copy = self.draw_detections(cv_image, results)
+
+                # 转换为ROS Image消息
                 img_msg = self.cv2_to_imgmsg(image_copy)
                 self.yolo_visualization_pub.publish(img_msg)
 
@@ -84,20 +77,14 @@ class YoloV5Node:
         @param img_msg:      ROS Image消息
         @return:             np.ndarray  OpenCV格式图像
         ''' 
-        # 检查图像编码格式
-        if img_msg.encoding != "bgr8":
+        if img_msg.encoding != "bgr8":  # 检查图像编码格式
             raise ValueError("Unsupported image encoding: {}".format(img_msg.encoding))
-        
-        # 创建图像数据类型
-        dtype = np.dtype("uint8").newbyteorder('>' if img_msg.is_bigendian else '<')
-
-        # 使用缓冲区创建 OpenCV 图像
+        dtype = np.dtype("uint8").newbyteorder('>' if img_msg.is_bigendian else '<')  # 创建图像数据类型
         image_opencv = np.ndarray(
             shape=(img_msg.height, img_msg.width, 3), 
             dtype=dtype, 
             buffer=img_msg.data
-        )
-        
+        )  # 使用缓冲区创建 OpenCV 图像
         return image_opencv
 
 
@@ -123,9 +110,7 @@ class YoloV5Node:
         @param image:       np.ndarray  OpenCV格式图像
         @param results:     Det2DDataSample  YOLO检测结果
         '''
-        # 复制原图像
-        image_copy = image.copy()
-
+        image_copy = image.copy()  # 复制原图像
         colors = [
             (0, 150, 180),    # 黄色, pedestrian
             (255, 0, 0),      # 蓝色, car
@@ -142,10 +127,10 @@ class YoloV5Node:
             x_min, y_min, x_max, y_max = map(int, xyxy)
             cls = int(cls)
             class_name = results.names[cls]
-            color = tuple(colors[cls]) 
+            color = tuple(colors[cls])
             label = f"{class_name} {conf:.2f}"
 
-            # 绘制边界框            
+            # 绘制边界框
             cv2.rectangle(image_copy, (x_min, y_min), (x_max, y_max), color, 2)
 
             # 绘制标签背景
@@ -156,10 +141,9 @@ class YoloV5Node:
             cv2.rectangle(image_copy, (label_x, label_y), (label_x + label_w, label_y + label_h), color, -1)
 
             # 绘制文字标签
+            # text_color = (0, 0, 0) if sum(color) > 400 else (255, 255, 255)  # 背景浅则用黑色文字，否则用白色
             cv2.putText(image_copy, label, (x_min, y_min - 2), font, font_size, (255, 255, 255), thickness)
 
-        # cv2.imshow('YOLOv5 Detection', image_copy)
-        # cv2.waitKey(1)
         return image_copy
 
     def publish_results(self, results):
@@ -184,9 +168,8 @@ class YoloV5Node:
         bbox2d_array.header.frame_id = "camera_link"
 
         for *xyxy, conf, cls in results.xyxy[0]:
-            # 解析边界框参数           
             x_min, y_min, x_max, y_max = xyxy
-            label = label_map.get(int(cls), int(cls)) # 使用字典映射
+            label = label_map.get(int(cls), int(cls)) # 字典映射
 
             bbox2d = BoundingBox2D()
             bbox2d.x_min = float(x_min)
@@ -195,13 +178,10 @@ class YoloV5Node:
             bbox2d.y_max = float(y_max)
             bbox2d.value = float(conf)
             bbox2d.label = label
-            bbox2d.model = 0
-            
+            bbox2d.model = 0 # 设置0代表YOLO模型的检测结果
             bbox2d_array.boxes.append(bbox2d)
 
-        self.yolo_detection_pub.publish(bbox2d_array)
-
-
+        self.yolo_results_pub.publish(bbox2d_array)
 
 
 if __name__ == '__main__':
@@ -210,4 +190,3 @@ if __name__ == '__main__':
         rospy.spin()
     except rospy.ROSInterruptException:
         cv2.destroyAllWindows()
-
