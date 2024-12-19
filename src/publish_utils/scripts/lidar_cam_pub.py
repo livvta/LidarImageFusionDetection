@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 # coding:utf-8
 
-'''
+"""
 lidar_cam_pub
 ================
 
@@ -13,12 +13,12 @@ Last Modified: 2024-11-28 21:04
 
 此程序功能：
 1. 接收来自Velodyne VLP-16激光雷达点云消息, 过滤掉无效点云, 通过ros发布PointCloud2消息。
-'''
+"""
 
 import rospy
 import numpy as np
 import math
-from sensor_msgs.msg  import PointCloud2, PointField
+from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs.msg import Image
 from std_msgs.msg import Header
 from visualization_msgs.msg import Marker
@@ -32,7 +32,7 @@ class LidarCamPub:
     def __init__(self):
         # 初始化ros节点，节点名称为pointpillars_node
         rospy.init_node('lidar_cam_pub', anonymous=False)
-   
+
         # 点云消息订阅与发布
         self.pointcloud_sub = rospy.Subscriber('velodyne_points', PointCloud2, self.callback, queue_size=10)
         self.processed_pointcloud_pub = rospy.Publisher('processed_points', PointCloud2, queue_size=10)
@@ -43,10 +43,10 @@ class LidarCamPub:
             self.synced_image_pub = rospy.Publisher('synced_image', Image, queue_size=2)
 
         # angle_boundaries话题，消息类型为Marker，用于可视化检测范围
-        self.marker_pub = rospy.Publisher('angle_boundaries', Marker, queue_size=10)        
+        self.marker_pub = rospy.Publisher('angle_boundaries', Marker, queue_size=10)
         self.marker = self.create_angle_boundaries()
 
-        self.callback_count = 0 
+        self.callback_count = 0
         self.img_msg = None
 
     def image_callback(self, img_msg):
@@ -55,7 +55,7 @@ class LidarCamPub:
     def callback(self, pcl_msg):
         self.callback_count += 1
 
-        if self.callback_count >= 5: # 每5条消息处理一次  10Hz -> 2Hz
+        if self.callback_count >= 5:  # 每5条消息处理一次  10Hz -> 2Hz
             self.callback_count = 0
 
             # 进行点云处理
@@ -77,7 +77,6 @@ class LidarCamPub:
             self.marker_pub.publish(self.marker)
 
             rospy.loginfo("All messages published.")
-
 
     def convert_pointcloud2(self, pcl_msg):
         """
@@ -119,7 +118,6 @@ class LidarCamPub:
 
         return points
 
-
     def create_pointcloud2_msg(self, points):
         """
         从处理后的点云数据创建PointCloud2消息
@@ -138,9 +136,8 @@ class LidarCamPub:
         ]
 
         point_cloud_msg = pc2.create_cloud(header, fields, points)
-        
-        return point_cloud_msg
 
+        return point_cloud_msg
 
     def publish_processed_pointcloud(self, processed_points):
         """
@@ -148,10 +145,9 @@ class LidarCamPub:
         @param processed_points  np.ndarray  [N, 4]  处理后的点云数据
         """
         point_cloud_msg = self.create_pointcloud2_msg(processed_points)
-        
+
         # 发布消息
         self.processed_pointcloud_pub.publish(point_cloud_msg)
-
 
     def create_angle_boundaries(self):
         """设置过滤范围边界线消息"""
@@ -165,7 +161,7 @@ class LidarCamPub:
 
         # 创建Marker
         marker = Marker()
-        marker.header.frame_id = "velodyne"          
+        marker.header.frame_id = "velodyne"
         marker.ns = "angle_boundaries"
         marker.id = 0
         marker.type = Marker.LINE_STRIP
@@ -198,6 +194,6 @@ class LidarCamPub:
 if __name__ == "__main__":
     try:
         lidar_cam_pub = LidarCamPub()
-        rospy.spin() 
+        rospy.spin()
     except rospy.ROSInterruptException:
         pass

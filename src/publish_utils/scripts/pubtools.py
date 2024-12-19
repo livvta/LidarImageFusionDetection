@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 # coding:utf-8
 
-'''
+"""
 pubtools
 ==============================
 Version: 1.1
@@ -9,16 +9,17 @@ Created Time: 2024-11-25
 
 Update:
 V1.1: 241126优化代码以减少重复并提高可读性
-'''
+"""
 
 import cv2
 import os
 import numpy as np
-import rospy 
+import rospy
 from std_msgs.msg import Header
 from sensor_msgs.msg import Image, PointCloud2, PointField
 import sensor_msgs.point_cloud2 as pcl2
 from cvbridge_utils import cv2_to_imgmsg
+
 
 def pointcloud_pub(point_cloud, pcl_pub):
     header = Header()
@@ -109,9 +110,9 @@ def manual_image_pub(image_path):
 
 
 def manual_pointcloud_pub(pc_path):
-    '''
+    """
     手动依次发布点云到 ROS 话题 /velodyne_points
-    '''
+    """
     frame = int(raw_input("Enter starting frame: "))
     pcl_pub = rospy.Publisher('velodyne_points', PointCloud2, queue_size=10)
 
@@ -119,7 +120,7 @@ def manual_pointcloud_pub(pc_path):
     pcl_files = sorted([f for f in os.listdir(pc_path) if f.endswith(('.bin'))])
 
     while not rospy.is_shutdown():
-        point_cloud = np.fromfile(os.path.join(pc_path, pcl_files[frame]), dtype=np.float32).reshape(-1, 4)        
+        point_cloud = np.fromfile(os.path.join(pc_path, pcl_files[frame]), dtype=np.float32).reshape(-1, 4)
         img = cv2.imread(os.path.join(image_path, image_files[frame]))
         # resize image
         img_resized = cv2.resize(img, (621, 187))
@@ -174,7 +175,6 @@ if __name__ == '__main__':
     elif dataset_select == '3':
         image_path = IMAGE_KITTI_RAW
         pc_path = PC_KITTI_RAW_16
-
 
     print("======================================")
     print("请选择发布方式:")

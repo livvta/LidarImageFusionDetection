@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # encoding=utf-8
 
-'''
+"""
 fusion_visualization_3d
 ================
 
@@ -13,7 +13,7 @@ ToDo:
 2.project_3d_to_2d函数 未完成
 3.bbox3d_center2corners函数 注释未翻译
 
-'''
+"""
 
 import rospy
 import cv2
@@ -25,8 +25,8 @@ from fusion_utils import read_calib, imgmsg_to_cv2
 
 
 # 读取标定文件
-P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix = read_calib( )
-intrinsic = P2[:, :3] # Cam 2(color)
+P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix = read_calib()
+intrinsic = P2[:, :3]  # Cam 2(color)
 '''
                 [fx   0  cx]  
     intrinsic = [ 0  fy  cy]  fx, fy:相机焦距
@@ -39,7 +39,7 @@ extrinsic = np.matmul(R0, lidar2camera_matrix)
 '''
 
 # 可视化置信度阈值 
-score_threshold=0.3
+score_threshold = 0.3
 
 
 class FusionVisualization:
@@ -53,7 +53,6 @@ class FusionVisualization:
         # 接受pp_results话题，消息类型为String
         self.pp_results_sub = rospy.Subscriber('pp_results', String, self.ppdetection_callback)
 
-
     def image_callback(self, img_msg):
         # 将Image消息转换为cv2
         self.cv_image = imgmsg_to_cv2(img_msg)
@@ -61,8 +60,7 @@ class FusionVisualization:
         # 获取图像height和width
         if not hasattr(self, 'initialized') or not self.initialized:
             self.height, self.width = self.cv_image.shape[:2]
-            self.initialized = True # 避免重复初始化
-
+            self.initialized = True  # 避免重复初始化
 
     def ppdetection_callback(self, pp_results):
         if self.cv_image is not None:
@@ -75,17 +73,16 @@ class FusionVisualization:
 
             self.draw_3d_bboxes_on_image(self.cv_image, projected_corners, scores_3d)
 
-
     def load_pp_result(self, pp_results):
-        '''
+        """
         加载PointPillars检测结果
         @param pp_results:      std_msgs.msg String
         @return:    tuple    (labels_3d, scores_3d, bboxes_3d, box_type_3d)
                     labels_3d    np.ndarray   [N]
                     scores_3d    np.ndarray   [N]
                     bboxes_3d    np.ndarray   [N, 7]
-                    box_type_3d  str    
-        '''
+                    box_type_3d  str
+        """
         pp_results = json.loads(pp_results.data)
         
         labels_3d_list = pp_results.get("labels_3d", [])
@@ -99,46 +96,44 @@ class FusionVisualization:
 
         return labels_3d, scores_3d, bboxes_3d, box_type_3d
 
-
     def bbox3d_center_to_corners(self, bboxes):
-        '''
+        """
         通过边界框的位置(底面中点)、尺寸、朝向角参数得到边界框的8个角点坐标
         box_3d: (x, y, z, x_size, y_size, z_size, yaw)
-        @param bboxes:      np.ndarray  [N, 7]  
+        @param bboxes:      np.ndarray  [N, 7]
         @return:            np.ndarray  [N, 8, 3]
 
                ^ z   x            6 ------ 5
                |   /             / |     / |
-               |  /             2 -|---- 1 |   
-        y      | /              |  |     | | 
+               |  /             2 -|---- 1 |
+        y      | /              |  |     | |
         <------|o               | 7 -----| 4
-                                |/   o   |/    
-                                3 ------ 0 
+                                |/   o   |/
+                                3 ------ 0
         x: front, y: left, z: top
-        '''
+        """
         centers, dims, angles = bboxes[:, :3], bboxes[:, 3:6], bboxes[:, 6]
         # 1. 生成边界框顶点坐标, 按照顺时针方向从最小点排列 （3, 0, 4， 7, 2, 1, 5, 6）   
-        bboxes_corners =np.array([[-0.5, 0.5, 0], [-0.5, -0.5, 0], [0.5, -0.5, 0], [0.5, 0.5, 0],
-                                  [-0.5, 0.5, 1.0],[-0.5, -0.5, 1.0], [0.5, -0.5, 1.0], [0.5, 0.5, 1.0]], 
+        bboxes_corners = np.array([[-0.5, 0.5, 0], [-0.5, -0.5, 0], [0.5, -0.5, 0], [0.5, 0.5, 0],
+                                  [-0.5, 0.5, 1.0], [-0.5, -0.5, 1.0], [0.5, -0.5, 1.0], [0.5, 0.5, 1.0]],
                                   dtype=np.float32)  
-        bboxes_corners = bboxes_corners[None, :, :] * dims[:, None, :] # [1, 8, 3] * [N, 1, 3] -> [N, 8, 3]
+        bboxes_corners = bboxes_corners[None, :, :] * dims[:, None, :]  # [1, 8, 3] * [N, 1, 3] -> [N, 8, 3]
     
         # 2. 绕z轴旋转边界框
-        rot_sin ,rot_cos = np.sin(angles),np.cos(angles)
-        ones ,zeros= np.ones_like(rot_cos), np.zeros_like(rot_cos) 
+        rot_sin, rot_cos = np.sin(angles), np.cos(angles)
+        ones, zeros = np.ones_like(rot_cos), np.zeros_like(rot_cos)
         rot_mat = np.array([[rot_cos, rot_sin, zeros],
                             [-rot_sin, rot_cos, zeros],
                             [zeros, zeros, ones]],  # 绕z轴旋转矩阵
-                            dtype=np.float32) # [3, 3, N]
+                            dtype=np.float32)  # [3, 3, N]
 
-        rot_mat = np.transpose(rot_mat, (2, 0, 1)) # [N, 3, 3]
-        bboxes_corners =  np.matmul(bboxes_corners,rot_mat) # [N, 8, 3]
+        rot_mat = np.transpose(rot_mat, (2, 0, 1))  # [N, 3, 3]
+        bboxes_corners = np.matmul(bboxes_corners, rot_mat)  # [N, 8, 3]
 
         # 3. 平移回原中心位置
         bboxes_corners += centers[:, None, :]
     
         return bboxes_corners
-
 
     def project_3d_to_2d(self, all_corners, intrinsic, extrinsic):
         """
@@ -158,7 +153,7 @@ class FusionVisualization:
         corners_3d_camera = np.matmul(all_corners_homogeneous, extrinsic.T)  # (X', Y', Z', 1)
 
         # 3. 将相机坐标系中的3D点投影到图像坐标系: [N, 8, 3] -> [N, 8, 3]
-        corners_2d_homogeneous = np.matmul(corners_3d_camera[:, :, :3], intrinsic.T) # (u, v, w)
+        corners_2d_homogeneous = np.matmul(corners_3d_camera[:, :, :3], intrinsic.T)  # (u, v, w)
 
         # 4. 将齐次坐标的归一化 (去除w分量): [N, 8, 3] -> [N, 8, 2]
         #    (u, v) = (u/w, v/w)
@@ -166,15 +161,14 @@ class FusionVisualization:
         
         return corners_2d
 
-
     def draw_3d_bboxes_on_image(self, img, projected_2d, scores_3d):
-        '''
+        """
         根据角点坐标绘制3D边界框
         @param img:            np.ndarray  2D图像
         @param projected_2d:   np.ndarray  [N, 8, 2]  边界框的8个角点坐标
         @param scores_3d:      np.ndarray  [N]        3D边界框的置信度
         @return:               np.ndarray  img        绘制了3D边界框的图像
-        '''
+        """
         img = img.copy()
 
         # 定义所有的线段连接规则（通过角点索引）
