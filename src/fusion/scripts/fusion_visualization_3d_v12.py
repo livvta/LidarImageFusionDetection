@@ -27,30 +27,30 @@ from fusion_utils import read_calib, imgmsg_to_cv2
 # 读取标定文件
 P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix = read_calib()
 intrinsic = P2[:, :3]  # Cam 2(color)
-'''
-                [fx   0  cx]  
+"""
+                [fx   0  cx]
     intrinsic = [ 0  fy  cy]  fx, fy:相机焦距
                 [ 0   0   1]  cx, cy:相机主点
-'''
+"""
 extrinsic = np.matmul(R0, lidar2camera_matrix)
-'''
+"""
     extrinsic = [R | T]       R:旋转矩阵[3, 3]
-                              T:平移向量[3, 1] 
-'''
+                              T:平移向量[3, 1]
+"""
 
-# 可视化置信度阈值 
+# 可视化置信度阈值
 score_threshold = 0.3
 
 
 class FusionVisualization:
     def __init__(self):
-        # 初始化ros节点，节点名称为fusion_visualization
+        # 初始化ros节点, 节点名称为fusion_visualization
         rospy.init_node('fusion_visualization', anonymous=False)
 
-        # 订阅image话题，消息类型为Image   
+        # 订阅image话题, 消息类型为Image
         self.image_sub = rospy.Subscriber('synced_image', Image, self.image_callback)
 
-        # 接受pp_results话题，消息类型为String
+        # 接收pp_results话题, 消息类型为String
         self.pp_results_sub = rospy.Subscriber('pp_results', String, self.ppdetection_callback)
 
     def image_callback(self, img_msg):
@@ -84,7 +84,7 @@ class FusionVisualization:
                     box_type_3d  str
         """
         pp_results = json.loads(pp_results.data)
-        
+
         labels_3d_list = pp_results.get("labels_3d", [])
         scores_3d_list = pp_results.get("scores_3d", [])
         bboxes_3d_list = pp_results.get("bboxes_3d", [])
@@ -93,7 +93,6 @@ class FusionVisualization:
         labels_3d = np.array(labels_3d_list)
         scores_3d = np.array(scores_3d_list)
         bboxes_3d = np.array(bboxes_3d_list)
-
         return labels_3d, scores_3d, bboxes_3d, box_type_3d
 
     def bbox3d_center_to_corners(self, bboxes):
@@ -113,12 +112,12 @@ class FusionVisualization:
         x: front, y: left, z: top
         """
         centers, dims, angles = bboxes[:, :3], bboxes[:, 3:6], bboxes[:, 6]
-        # 1. 生成边界框顶点坐标, 按照顺时针方向从最小点排列 （3, 0, 4， 7, 2, 1, 5, 6）   
+        # 1. 计算边界框顶点坐标, 按照顺时针方向从最小点排列 （3, 0, 4, 7, 2, 1, 5, 6）
         bboxes_corners = np.array([[-0.5, 0.5, 0], [-0.5, -0.5, 0], [0.5, -0.5, 0], [0.5, 0.5, 0],
                                   [-0.5, 0.5, 1.0], [-0.5, -0.5, 1.0], [0.5, -0.5, 1.0], [0.5, 0.5, 1.0]],
-                                  dtype=np.float32)  
+                                  dtype=np.float32)
         bboxes_corners = bboxes_corners[None, :, :] * dims[:, None, :]  # [1, 8, 3] * [N, 1, 3] -> [N, 8, 3]
-    
+
         # 2. 绕z轴旋转边界框
         rot_sin, rot_cos = np.sin(angles), np.cos(angles)
         ones, zeros = np.ones_like(rot_cos), np.zeros_like(rot_cos)
@@ -132,7 +131,6 @@ class FusionVisualization:
 
         # 3. 平移回原中心位置
         bboxes_corners += centers[:, None, :]
-    
         return bboxes_corners
 
     def project_3d_to_2d(self, all_corners, intrinsic, extrinsic):
@@ -144,7 +142,7 @@ class FusionVisualization:
         @return:                np.ndarray  [N, 8, 2]   投影后的2D坐标
         """
         num_bbox = all_corners.shape[0]
-        
+
         # 1. 扩展3D角点为齐次坐标: [N, 8, 3] -> [N, 8, 4]
         ones = np.ones((num_bbox, 8, 1))
         all_corners_homogeneous = np.concatenate([all_corners, ones], axis=-1)  # (X, Y, Z, 1)
@@ -158,7 +156,7 @@ class FusionVisualization:
         # 4. 将齐次坐标的归一化 (去除w分量): [N, 8, 3] -> [N, 8, 2]
         #    (u, v) = (u/w, v/w)
         corners_2d = corners_2d_homogeneous[:, :, :2] / corners_2d_homogeneous[:, :, 2:]  # (u, v)
-        
+
         return corners_2d
 
     def draw_3d_bboxes_on_image(self, img, projected_2d, scores_3d):
@@ -177,26 +175,26 @@ class FusionVisualization:
             (4, 5), (5, 6), (6, 7), (7, 4),  # 顶部矩形
             (0, 4), (1, 5), (2, 6), (3, 7)   # 垂直连接线
         ]
-        
-        # 遍历所有的3D边界框，筛选出符合置信度要求的边界框
+
+        # 遍历所有的3D边界框, 筛选出符合置信度要求的边界框
         for i in range(len(scores_3d)):
             if scores_3d[i] < score_threshold:
                 continue
-            
+
             # 获取该边界框的2D投影角点
             corners_2d = projected_2d[i]  # [8, 2]
-            
+
             # 将投影的2D角点转换为整数坐标
             corners_2d_int = np.round(corners_2d).astype(int)
-            
+
             # 绘制边界框的连接线
             for (start, end) in connections:
                 cv2.line(img, tuple(corners_2d_int[start]), tuple(corners_2d_int[end]), (255, 0, 0), 1)
-        
+
         # 显示图像
         cv2.imshow('3D BBoxes on Image', img)
         cv2.waitKey(1)
-        
+
         # 返回绘制了边界框的图像
         return img
 
@@ -206,4 +204,4 @@ if __name__ == '__main__':
         fusion = FusionVisualization()
         rospy.spin()
     except rospy.ROSInterruptException:
-        pass        
+        pass

@@ -34,11 +34,9 @@ def pointcloud_pub(point_cloud, pcl_pub):
     cloud_msg = pcl2.create_cloud(header, fields, point_cloud)
     pcl_pub.publish(cloud_msg)
 
-
 def image_pub(img, image_pub):
     img_msg = cv2_to_imgmsg(img)
     image_pub.publish(img_msg)
-
 
 def publish_data(image_path, pc_path, auto_mode=True):
     frame = 0 if auto_mode else int(raw_input("Enter starting frame: "))
@@ -79,7 +77,6 @@ def publish_data(image_path, pc_path, auto_mode=True):
 
     cv2.destroyAllWindows()
 
-
 def manual_image_pub(image_path):
     frame = int(raw_input("Enter starting frame: "))
     cam_pub = rospy.Publisher('/camera/image_raw', Image, queue_size=10)
@@ -107,7 +104,6 @@ def manual_image_pub(image_path):
             break
 
     cv2.destroyAllWindows()
-
 
 def manual_pointcloud_pub(pc_path):
     """
@@ -143,7 +139,7 @@ def manual_pointcloud_pub(pc_path):
 
 
 if __name__ == '__main__':
-    rospy.init_node('kitti_publisher', anonymous=True)
+    rospy.init_node('kitti_publisher', anonymous=False)
 
     IMAGE_KITTI_RAW = '/media/harris/PM981/kitti_16/testing/image_2'
     PC_KITTI_RAW_16 = '/media/harris/PM981/kitti_16/testing/velodyne'

@@ -27,11 +27,11 @@ def read_calib():
     return P0, P1, P2, P3, R0, lidar2camera_m, imu2lidar_m
 
 def imgmsg_to_cv2(img_msg):
-    '''
+    """
     将ROS Image消息转换为OpenCV格式
     @param img_msg:      ROS Image消息
     @return:             np.ndarray  OpenCV格式图像
-    '''
+    """
 
     if img_msg.encoding != "bgr8":  # 检查图像编码格式
         raise ValueError("Unsupported image encoding: {}".format(img_msg.encoding))
@@ -46,11 +46,11 @@ def imgmsg_to_cv2(img_msg):
     return image_opencv
 
 def cv2_to_imgmsg(cv_image):
-    '''
+    """
     将OpenCV格式图像转换为ROS Image消息
     @param cv_image     np.ndarray  OpenCV格式图像
     @return:            ROS Image消息
-    '''
+    """
     img_msg = Image()
     img_msg.height = cv_image.shape[0]
     img_msg.width = cv_image.shape[1]
@@ -85,10 +85,10 @@ def bbox3d_center_to_corners(bboxes):
     x: front, y: left, z: top
     """
     centers, dims, angles = bboxes[:, :3], bboxes[:, 3:6], bboxes[:, 6]
-    # 1. 生成边界框顶点坐标, 按照顺时针方向从最小点排列 （3, 0, 4， 7, 2, 1, 5, 6）   
+    # 1. 计算边界框顶点坐标, 按照顺时针方向从最小点排列 （3, 0, 4, 7, 2, 1, 5, 6）
     bboxes_corners = np.array([[-0.5, 0.5, 0], [-0.5, -0.5, 0], [0.5, -0.5, 0], [0.5, 0.5, 0],
                                 [-0.5, 0.5, 1.0], [-0.5, -0.5, 1.0], [0.5, -0.5, 1.0], [0.5, 0.5, 1.0]],
-                                dtype=np.float32)  
+                                dtype=np.float32)
     bboxes_corners = bboxes_corners[None, :, :] * dims[:, None, :]  # [1, 8, 3] * [N, 1, 3] -> [N, 8, 3]
 
     # 2. 绕z轴旋转边界框

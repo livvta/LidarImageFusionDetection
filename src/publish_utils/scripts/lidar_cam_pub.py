@@ -9,7 +9,7 @@ Version: 2.0
 Last Modified: 2024-11-28 21:04
 
 由于受计算平台检测性能限制, 无法做到信息实时检测(rate = 10)
-因此，本程序目的在于同步激光雷达点云与图像消息，并对发布频率进行控制。
+因此, 本程序目的在于同步激光雷达点云与图像消息, 并对发布频率进行控制。
 
 此程序功能：
 1. 接收来自Velodyne VLP-16激光雷达点云消息, 过滤掉无效点云, 通过ros发布PointCloud2消息。
@@ -30,7 +30,7 @@ PUB_IMAGE = True
 
 class LidarCamPub:
     def __init__(self):
-        # 初始化ros节点，节点名称为pointpillars_node
+        # 初始化ros节点, 节点名称为pointpillars_node
         rospy.init_node('lidar_cam_pub', anonymous=False)
 
         # 点云消息订阅与发布
@@ -42,7 +42,7 @@ class LidarCamPub:
             self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback, queue_size=10)
             self.synced_image_pub = rospy.Publisher('synced_image', Image, queue_size=2)
 
-        # angle_boundaries话题，消息类型为Marker，用于可视化检测范围
+        # angle_boundaries话题, 消息类型为Marker, 用于可视化检测范围
         self.marker_pub = rospy.Publisher('angle_boundaries', Marker, queue_size=10)
         self.marker = self.create_angle_boundaries()
 
@@ -115,7 +115,6 @@ class LidarCamPub:
 
         # 应用掩膜过滤点并返回
         points = np.column_stack((x[mask], y[mask], z[mask], i[mask]))
-
         return points
 
     def create_pointcloud2_msg(self, points):
@@ -136,7 +135,6 @@ class LidarCamPub:
         ]
 
         point_cloud_msg = pc2.create_cloud(header, fields, points)
-
         return point_cloud_msg
 
     def publish_processed_pointcloud(self, processed_points):
@@ -155,9 +153,9 @@ class LidarCamPub:
         line_length = 7  # 设置线长
         x_origin = 1.0  # 设置原点
         left_angle = math.radians(45)
-        right_angle = math.radians(45)  # 设置角度，约为相机可视范围
+        right_angle = math.radians(45)  # 设置角度, 约为相机可视范围
         left_boundary = (x_origin + line_length, line_length * math.tan(left_angle))  # x + d
-        right_boundary = (x_origin + line_length, -line_length * math.tan(right_angle))  # x + d  
+        right_boundary = (x_origin + line_length, -line_length * math.tan(right_angle))  # x + d
 
         # 创建Marker
         marker = Marker()
@@ -180,14 +178,13 @@ class LidarCamPub:
         marker.color.r = 1.0  # 红色
         marker.color.g = 0.0
         marker.color.b = 0.0
-        marker.color.a = 1.0  # 不透明  
+        marker.color.a = 1.0  # 不透明
 
         # 设置 Marker points
         marker.points.append(Point(x_origin, 0, 0))  # 起点
         marker.points.append(Point(left_boundary[0], left_boundary[1], 0))  # 左边界
         marker.points.append(Point(x_origin, 0, 0))  # 起点
         marker.points.append(Point(right_boundary[0], right_boundary[1], 0))  # 右边界
-
         return marker
 
 

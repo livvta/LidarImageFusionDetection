@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 # coding:utf-8
 
-'''
+"""
 camear_pub.py
 ==================
 Version: 1.0
@@ -9,15 +9,16 @@ Last Modified: 2024-12-01 00:03
 
 功能：
 - 读取摄像头数据并发布到/camera/image_raw话题
-'''
+"""
 
 import rospy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 
+
 def publish_camera():
-    rospy.init_node('camera_publisher', anonymous=True) # 待定
+    rospy.init_node('camera_publisher', anonymous=False) # 待定
     image_pub = rospy.Publisher('/camera/image_raw', Image, queue_size=10)
     bridge = CvBridge()
     # cap = cv2.VideoCapture(0)

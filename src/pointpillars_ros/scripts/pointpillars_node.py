@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 # encoding=utf-8
 
-'''
+"""
 pointpillars_node
 ================
 
 Version: 3.5
 Last Modified: 2024-11-14 20:10
 
-更新内容: 
+更新内容:
 10.14: 增加Marker消息类型, 用于发布检测范围标识
 10.15: 更换检测方式, 将LidarDet3DInferencer改为inference_detector
 11.05: callback函数逻辑优化
-11.06: 增加String消息类型, 用于发布原始检测结果; 
+11.06: 增加String消息类型, 用于发布原始检测结果;
 11.09: 创建processed_points话题, 可视化ROI过滤后点云+强度, 优化代码
 11.14: 将点云过滤及Marker发布逻辑移至lidar_cam_pub.py
-'''
+"""
 
 import rospy
 import math
@@ -69,7 +69,7 @@ class PointPillarsNode:
 
             # 发布检测结果 String
             self.publish_string_results(labels_3d, scores_3d, bboxes_3d)
-            
+
             # 发布3D边界框 BoundingBoxArray
             if rviz_visualization:
                 self.publish_bboxes_array(labels_3d, scores_3d, bboxes_3d)
@@ -91,24 +91,24 @@ class PointPillarsNode:
 
 
     def pointpillars_detect(self, pcd):
-        '''
+        """
         使用PointPillars模型进行点云检测
         @param pcd:     np.ndarray  [N, 4]
         @return:        Det3DDataSample    原始检测结果
-        '''
+        """
         results, _ = inference_detector(self.pointpillars_model, pcd)
         return results
 
 
     def process_results(self, results_mmdet3d):
-        '''
+        """
         处理检测结果, 提取3D边界框、标签和置信度得分
         @param results_mmdet3d:     Det3DDataSample
         @return:    tuple    (labels_3d, scores_3d, bboxes_3d, box_type_3d)
                     labels_3d    np.ndarray   [N]
                     scores_3d    np.ndarray   [N]
                     bboxes_3d    np.ndarray   [N, 7]
-        '''
+        """
         labels_3d = results_mmdet3d.pred_instances_3d.labels_3d.cpu().numpy()
         scores_3d = results_mmdet3d.pred_instances_3d.scores_3d.cpu().numpy()
         bboxes_3d = results_mmdet3d.pred_instances_3d.bboxes_3d.cpu().numpy()
@@ -116,16 +116,16 @@ class PointPillarsNode:
 
 
     def publish_string_results(self, labels_3d, scores_3d, bboxes_3d):
-        '''
+        """
         将检测结果以String消息类型发布
         @param labels_3d:       np.ndarray  [N]
         @param scores_3d:       np.ndarray  [N]
         @param bboxes_3d:       np.ndarray  [N, 7]
-        '''
+        """
         results_dict = {
             "labels_3d": labels_3d.tolist(),
             "scores_3d": scores_3d.tolist(),
-            "bboxes_3d": bboxes_3d.tolist(), 
+            "bboxes_3d": bboxes_3d.tolist(),
             "box_type_3d": "LiDAR"
         }
 
@@ -134,7 +134,7 @@ class PointPillarsNode:
 
 
     def publish_bboxes_array(self, labels_3d, scores_3d, bboxes_3d):
-        '''
+        """
         将检测结果以BoundingBoxArray消息类型发布, 用于rviz可视化
         @param bboxes_3d:       np.ndarray  [N, 7]
         @param labels_3d:       np.ndarray  [N]
@@ -146,7 +146,7 @@ class PointPillarsNode:
         geometry_msgs/Vector3 dimensions // 尺寸
         float32 value // 置信度
         unit32 label  // 标签
-        '''
+        """
         bbox_array = BoundingBoxArray()
         current_time = rospy.Time.now()  # 只计算一次
         bbox_array.header.stamp = current_time

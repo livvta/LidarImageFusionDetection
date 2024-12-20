@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # encoding=utf-8
 
-'''
+"""
 downsampling_4x.py
 ==================
 Version: 1.1
@@ -9,7 +9,7 @@ Last Modified: 2024-11-26 16:46
 
 功能：
 - 根据激光雷达的线束特性, 对点云数据进行4倍下采样
-'''
+"""
 
 import numpy as np
 import os
@@ -60,9 +60,7 @@ def find_beam_ends(points):
 
     if beam_count != 63:
         print("Warimg: beams not equal to 64.  beams:", beam_count)
-    
     return beam_end_indices
-
 
 def downsample_pointcloud(points, beam_end_indices):
     """
@@ -77,7 +75,6 @@ def downsample_pointcloud(points, beam_end_indices):
         end_idx = beam_end_indices[i + 1]
         selected_points.extend(points[start_idx:end_idx])
     return np.array(selected_points)
-
 
 def process_folder(input_folder, output_folder):
     """

@@ -1,17 +1,17 @@
 #!/usr/bin/env python
 # encoding=utf-8
 
-'''
+"""
 yolov5_node
 ================
 
 Version: 2.3
 Last Modified: 2024-12-28
 
-更新日志: 
+更新日志:
 11.05: 将YOLODetection消息类型更新为BoundingBox2DArray
 11.08: 提高代码复用, 优化可视化效果
-'''
+"""
 
 import cv2
 import rospy
@@ -72,28 +72,28 @@ class YoloV5Node:
 
 
     def imgmsg_to_cv2(self, img_msg):
-        '''
+        """
         将ROS Image消息转换为OpenCV格式
         @param img_msg:      ROS Image消息
         @return:             np.ndarray  OpenCV格式图像
-        ''' 
+        """
         if img_msg.encoding != "bgr8":  # 检查图像编码格式
             raise ValueError("Unsupported image encoding: {}".format(img_msg.encoding))
         dtype = np.dtype("uint8").newbyteorder('>' if img_msg.is_bigendian else '<')  # 创建图像数据类型
         image_opencv = np.ndarray(
-            shape=(img_msg.height, img_msg.width, 3), 
-            dtype=dtype, 
+            shape=(img_msg.height, img_msg.width, 3),
+            dtype=dtype,
             buffer=img_msg.data
         )  # 使用缓冲区创建 OpenCV 图像
         return image_opencv
 
 
     def cv2_to_imgmsg(self, cv_image):
-        '''
+        """
         将OpenCV格式图像转换为ROS Image消息
         @param cv_image     np.ndarray  OpenCV格式图像
         @return:            ROS Image消息
-        '''
+        """
         img_msg = Image()
         img_msg.height = cv_image.shape[0]
         img_msg.width = cv_image.shape[1]
@@ -105,11 +105,11 @@ class YoloV5Node:
 
 
     def draw_detections(self, image, results):
-        '''
+        """
         绘制YOLO检测结果
         @param image:       np.ndarray  OpenCV格式图像
         @param results:     Det2DDataSample  YOLO检测结果
-        '''
+        """
         image_copy = image.copy()  # 复制原图像
         colors = [
             (0, 150, 180),    # 黄色, pedestrian
@@ -121,7 +121,7 @@ class YoloV5Node:
         font_size = 0.5     # 标签字号
 
         for *xyxy, conf, cls in results.xyxy[0]:
-            if conf < yolo_confidence_threshold: 
+            if conf < yolo_confidence_threshold:
                 continue
 
             x_min, y_min, x_max, y_max = map(int, xyxy)
@@ -141,13 +141,13 @@ class YoloV5Node:
             cv2.rectangle(image_copy, (label_x, label_y), (label_x + label_w, label_y + label_h), color, -1)
 
             # 绘制文字标签
-            # text_color = (0, 0, 0) if sum(color) > 400 else (255, 255, 255)  # 背景浅则用黑色文字，否则用白色
+            # text_color = (0, 0, 0) if sum(color) > 400 else (255, 255, 255)  # 背景浅则用黑色文字, 否则用白色
             cv2.putText(image_copy, label, (x_min, y_min - 2), font, font_size, (255, 255, 255), thickness)
 
         return image_copy
 
     def publish_results(self, results):
-        '''
+        """
         以BoundingBox2DArray消息类型发布YOLO检测结果
         @param results:     Det2DDataSample  YOLO检测结果
         -------------------------------------------------
@@ -162,7 +162,7 @@ class YoloV5Node:
         yolov5_ros.msg/BoundingBox2DArray.msg
         Header header // ROS消息头
         BoundingBox2D[] boxes
-        '''
+        """
         bbox2d_array = BoundingBox2DArray()
         bbox2d_array.header.stamp = rospy.Time.now()
         bbox2d_array.header.frame_id = "camera_link"

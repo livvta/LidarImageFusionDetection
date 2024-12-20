@@ -16,8 +16,9 @@ import open3d as o3d
 import matplotlib.pyplot as plt
 import open3d.core as o3c
 from sensor_msgs.msg import PointCloud2, Image
-from yolov5_ros.msg import BoundingBox2DArray
 from fusion_utils import read_calib, imgmsg_to_cv2, process_points
+from yolov5_ros.msg import BoundingBox2DArray
+
 
 # 读取标定文件
 P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix = read_calib()
@@ -50,7 +51,7 @@ class FusionVisualization:
 
     def detection_callback(self, msg):
         if self.cv_image is not None:
-            self.fuse_and_display(msg)        
+            self.fuse_and_display(msg)
 
     def fuse_and_display(self, msg):
         # 三维点云投影生成深度图
