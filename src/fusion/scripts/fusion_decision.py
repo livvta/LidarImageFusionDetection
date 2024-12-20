@@ -5,42 +5,66 @@
 fusion_decision
 ================
 
-Version: 1.1
-Last Modified: 2024-12-18
+Version: 2.1
+Last Modified: 2024-12-20
 """
 
-import rospy
 import json
+import argparse
+import rospy
 import numpy as np
 from std_msgs.msg import String
+from fusion_utils import calibration_param
 from yolov5_ros.msg import BoundingBox2D, BoundingBox2DArray
-from fusion_utils import read_calib
 
 # 读取标定文件
-P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix = read_calib()
-intrinsic = P2[:, :3]  # Cam 2(color)
-'''
-                [fx   0  cx]
-    intrinsic = [ 0  fy  cy]  fx, fy:相机焦距
-                [ 0   0   1]  cx, cy:相机主点
-'''
-extrinsic = np.matmul(R0, lidar2camera_matrix)
-'''
-    extrinsic = [R | T]       R:旋转矩阵[3, 3]
-                              T:平移向量[3, 1]
-'''
+intrinsic, extrinsic = calibration_param()
 
-# 置信度阈值
-pp_confidence_threshold_fusion = 0.38
-yolo_confidence_threshold_fusion = 0.3
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Fusion Decision System")
+    parser.add_argument('-pp_conf', type=float, default=0.38, help='Confidence threshold for PP results')
+    parser.add_argument('-yolo_conf', type=float, default=0.3, help='Confidence threshold for YOLO results')
+    parser.add_argument('-iou_thresh', type=float, default=0.5, help='IoU threshold for NMS')
+    parser.add_argument('-yolo_weight', type=float, default=0.8, help='Weight for YOLO results')
+    parser.add_argument('-pp_weight', type=float, default=1.0, help='Weight for PointPillars results')
+    args = parser.parse_args()
+    return args
 
 
 class FusionDecision:
-    def __init__(self):
+    """
+    3D & 2D 边界框结果融合决策系统。
+    接收边界框数据, 进行处理并融合结果。
+    """
+    def __init__(self, yolo_conf, pp_conf, iou_threshold, yolo_weight, pp_weight):
         rospy.init_node('fusion_decision', anonymous=False)
         self.pp_results_sub = rospy.Subscriber('pp_results', String, self.pp_results_callback)
         self.yolo_results_sub = rospy.Subscriber('yolo_results', BoundingBox2DArray, self.yolo_results_callback)
         self.fusion_detection_pub = rospy.Publisher('fusion_results', BoundingBox2DArray, queue_size=10)
+
+        # 初始化参数
+        self.yolo_detection_bboxes = []
+        self.pp_confidence_threshold = pp_conf
+        self.yolo_confidence_threshold = yolo_conf
+        self.iou_threshold = iou_threshold
+        self.yolo_weight = yolo_weight
+        self.pp_weight = pp_weight
+
+    def pp_results_callback(self, pp_results):
+        labels_3d, scores_3d, bboxes_3d, _ = self.load_pp_result(pp_results)
+        corners_3d = self.bbox3d_center_to_corners(bboxes_3d)
+        projected_corners = self.project_3d_to_2d(corners_3d, intrinsic, extrinsic)
+        pp_detected_bboxes = self.bboxes_3d_to_2d(projected_corners, scores_3d, labels_3d)
+        final_results = self.weighted_nms(self.yolo_detection_bboxes + pp_detected_bboxes)
+        self.publish_fusion_results(final_results)
+
+        # print("\n============================")
+        # print("yolo_detection_bboxes", self.yolo_detection_bboxes)
+        # print("\n============================")
+        # print("pp_detected_bboxes", pp_detected_bboxes)
+        # print("\n============================")
+        # print("final_results", final_results)
+        # print("\n============================")
 
     def yolo_results_callback(self, yolo_results):
         """
@@ -60,53 +84,6 @@ class FusionDecision:
         BoundingBox2D[] boxes
         """
         self.yolo_detection_bboxes = self.process_yolo_results(yolo_results)
-
-    def pp_results_callback(self, pp_results):
-        # if self.cv_image is not None:
-
-        labels_3d, scores_3d, bboxes_3d, box_type_3d = self.load_pp_result(pp_results)
-
-        corners_3d = self.bbox3d_center_to_corners(bboxes_3d)
-
-        projected_corners = self.project_3d_to_2d(corners_3d, intrinsic, extrinsic)
-
-        pp_detected_bboxes = self.bboxes_3d_to_2d(projected_corners, scores_3d, labels_3d)
-
-        final_results = self.weighted_nms(self.yolo_detection_bboxes + pp_detected_bboxes)
-
-        self.publish_fusion_results(final_results)
-
-        # print("\n============================")
-        # print("yolo_detection_bboxes", self.yolo_detection_bboxes)
-        # print("\n============================")
-        # print("pp_detected_bboxes", pp_detected_bboxes)
-        # print("\n============================")
-        # print("final_results", final_results)
-        # print("\n============================")
-
-    def process_yolo_results(self, yolo_results):
-        bounding_boxes = yolo_results.boxes
-        detected_bboxes = []
-
-        for box in bounding_boxes:
-            x_min = box.x_min
-            y_min = box.y_min
-            x_max = box.x_max
-            y_max = box.y_max
-            confidence = box.value
-            label = box.label
-
-            bbox_info = {
-                'x_min': x_min,
-                'y_min': y_min,
-                'x_max': x_max,
-                'y_max': y_max,
-                'confidence': confidence,
-                'label': label,
-                'model': 0
-            }
-            detected_bboxes.append(bbox_info)
-        return detected_bboxes
 
     def load_pp_result(self, pp_results):
         """
@@ -147,7 +124,7 @@ class FusionDecision:
         x: front, y: left, z: top
         """
         centers, dims, angles = bboxes[:, :3], bboxes[:, 3:6], bboxes[:, 6]
-        # 1. 生成边界框顶点坐标, 按照顺时针方向从最小点排列 （3, 0, 4， 7, 2, 1, 5, 6）
+        # 1. 计算边界框顶点坐标, 按照顺时针方向从最小点排列 （3, 0, 4, 7, 2, 1, 5, 6）
         bboxes_corners = np.array([[-0.5, 0.5, 0], [-0.5, -0.5, 0], [0.5, -0.5, 0], [0.5, 0.5, 0],
                                   [-0.5, 0.5, 1.0], [-0.5, -0.5, 1.0], [0.5, -0.5, 1.0], [0.5, 0.5, 1.0]],
                                   dtype=np.float32)
@@ -203,7 +180,7 @@ class FusionDecision:
         """
         pp_detected_bboxes = []
         for i in range(len(scores_3d)):  # 置信度筛选
-            if scores_3d[i] < pp_confidence_threshold_fusion:
+            if scores_3d[i] < self.pp_confidence_threshold:
                 continue
 
             # 获取该边界框的2D投影角点
@@ -229,9 +206,42 @@ class FusionDecision:
 
         return pp_detected_bboxes
 
+    def process_yolo_results(self, yolo_results):
+        bounding_boxes = yolo_results.boxes
+        yolo_detected_bboxes = []
+
+        for box in bounding_boxes:
+            x_min = box.x_min
+            y_min = box.y_min
+            x_max = box.x_max
+            y_max = box.y_max
+            confidence = box.value
+            label = box.label
+
+            if confidence < self.yolo_confidence_threshold:
+                continue
+
+            bbox_info = {
+                'x_min': x_min,
+                'y_min': y_min,
+                'x_max': x_max,
+                'y_max': y_max,
+                'confidence': confidence,
+                'label': label,
+                'model': 0
+            }
+            yolo_detected_bboxes.append(bbox_info)
+
+        return yolo_detected_bboxes
+
     @staticmethod
     def iou(bbox1, bbox2):
-        """计算两个边界框的IoU"""
+        """
+        计算两个边界框的IoU (Intersection over Union)
+        @param bbox1:      dict      边界框1, 包含 'x_min', 'y_min', 'x_max', 'y_max'
+        @param bbox2:      dict      边界框2, 包含 'x_min', 'y_min', 'x_max', 'y_max'
+        @return:           float     计算得到的IoU值, 若没有交集则返回0
+        """
         x1 = max(bbox1['x_min'], bbox2['x_min'])
         y1 = max(bbox1['y_min'], bbox2['y_min'])
         x2 = min(bbox1['x_max'], bbox2['x_max'])
@@ -245,66 +255,11 @@ class FusionDecision:
         union_area = bbox1_area + bbox2_area - intersection_area
         return intersection_area / union_area if union_area > 0 else 0
 
-    # def weighted_nms(self, bboxes, iou_threshold=0.5, yolo_weight=0.8, pp_weight=1.0):
-    #     """
-    #     带权重的NMS，优先考虑yolo的结果。
-
-    #     Args:
-    #         bboxes: 所有边界框的列表，每个边界框是一个字典。
-    #         iou_threshold: IoU阈值。
-    #         yolo_weight: YOLO模型的权重。
-    #         pp_weight: PointPillars模型的权重。
-
-    #     Returns:
-    #         经过NMS处理后的边界框列表。
-    #     """
-
-    #     if not bboxes:
-    #         return []
-
-    #     # 根据置信度降序排列
-    #     bboxes.sort(key=lambda x: x['confidence'], reverse=True)
-
-    #     final_bboxes = []
-    #     while bboxes:
-    #         best_bbox = bboxes.pop(0)
-    #         final_bboxes.append(best_bbox)
-
-    #         remaining_bboxes = []
-    #         for bbox in bboxes:
-    #             if best_bbox['label'] != bbox['label']:  # 不同类别不进行iou计算
-    #                 remaining_bboxes.append(bbox)
-    #                 continue
-
-    #             current_iou = self.iou(best_bbox, bbox)
-    #             if current_iou <= iou_threshold:
-    #                 remaining_bboxes.append(bbox)
-    #             else:
-    #                 # 根据模型权重调整置信度，并保留置信度高的框
-    #                 if best_bbox['model'] == 0 and bbox['model'] == 1:
-    #                     if best_bbox['confidence'] < bbox['confidence'] * pp_weight/yolo_weight:
-    #                         best_bbox = bbox
-    #                 elif best_bbox['model'] == 1 and bbox['model'] == 0:
-    #                     if bbox['confidence'] > best_bbox['confidence'] * pp_weight/yolo_weight:
-    #                         final_bboxes[-1] = bbox
-    #                         best_bbox = bbox
-
-    #         bboxes = remaining_bboxes
-
-    #     return final_bboxes
-
-    def weighted_nms(self, bboxes, iou_threshold=0.5, yolo_weight=0.8, pp_weight=1.0):
+    def weighted_nms(self, bboxes):
         """
-        带权重的NMS，优先考虑yolo的结果。
-
-        Args:
-            bboxes: 所有边界框的列表，每个边界框是一个字典，包含 'confidence'、'label' 和 'model' 键。
-            iou_threshold: IoU阈值。
-            yolo_weight: YOLO模型的权重。
-            pp_weight: PointPillars模型的权重。
-
-        Returns:
-            经过NMS处理后的边界框列表。
+        带权重的NMS (Non-Maximum Suppression)
+        @param bboxes:     list      边界框列表, 每个边界框为字典
+        @return:           list      经过NMS处理后的边界框列表
         """
         if not bboxes:
             return []
@@ -326,24 +281,29 @@ class FusionDecision:
                     return True  # 不同类别保留
 
                 current_iou = self.iou(best_bbox, bbox)
-                if current_iou <= iou_threshold:
+                if current_iou <= self.iou_threshold:
                     return True  # IoU低于阈值保留
 
                 # 根据模型权重调整置信度比较
                 if best_bbox['model'] == 0 and bbox['model'] == 1:
-                    if best_bbox['confidence'] < bbox['confidence'] * pp_weight / yolo_weight:
+                    if best_bbox['confidence'] < bbox['confidence'] * self.pp_weight / self.yolo_weight:
                         best_bbox.update(bbox)
                 elif best_bbox['model'] == 1 and bbox['model'] == 0:
-                    if bbox['confidence'] > best_bbox['confidence'] * pp_weight / yolo_weight:
+                    if bbox['confidence'] > best_bbox['confidence'] * self.pp_weight / self.yolo_weight:
                         best_bbox.update(bbox)
                 return False
 
-            # 更新bboxes列表，仅保留需要的框
+            # 更新bboxes列表, 仅保留需要的框
             bboxes = list(filter(should_keep, bboxes))
 
         return final_bboxes
 
     def publish_fusion_results(self, detections):
+        """
+        发布融合后的检测结果
+        @param detections:  list      检测结果列表
+        @return:            None      无返回值, 直接发布消息
+        """
         msg = BoundingBox2DArray()
         msg.header.stamp = rospy.Time.now()
         msg.header.frame_id = "camera_link"
@@ -361,99 +321,14 @@ class FusionDecision:
 
         self.fusion_detection_pub.publish(msg)
 
-    # def iou(self, box1, box2):
-    #     '''
-    #     计算两个边界框的交并比（Intersection over Union, IoU）
-    #     @param box1: dict 包含x_min, y_min, x_max, y_max
-    #     @param box2: dict 包含x_min, y_min, x_max, y_max
-    #     @return: float IoU值
-    #     '''
-    #     x1 = max(box1['x_min'], box2['x_min'])
-    #     y1 = max(box1['y_min'], box2['y_min'])
-    #     x2 = min(box1['x_max'], box2['x_max'])
-    #     y2 = min(box1['y_max'], box2['y_max'])
-
-    #     inter_area = max(0, x2 - x1) * max(0, y2 - y1)
-    #     box1_area = (box1['x_max'] - box1['x_min']) * (box1['y_max'] - box1['y_min'])
-    #     box2_area = (box2['x_max'] - box2['x_min']) * (box2['y_max'] - box2['y_min'])
-    #     iou = inter_area / float(box1_area + box2_area - inter_area)
-
-    #     return iou
-
-    # # def non_max_suppression(fusion_boxes, fusion_scores, iou_threshold):
-    # #     '''
-    # #     非极大值抑制（Non-Maximum Suppression, NMS）
-    # #     @param fusion_boxes:
-    # #     @param fusion_scores:       np.ndarray  [N]
-    # #     @param iou_threshold:       float IoU阈值
-    # #     @return: list 经过NMS处理后的边界框列表
-    # #     '''
-    # #     if len(fusion_boxes) == 0:
-    # #         return []
-
-    # def fusion_decision(self, yolo_bboxes, pp_bboxes):
-    #     '''
-    #     融合YOLO和PointPillars的检测结果
-    #     @param yolo_bboxes: list YOLO检测的边界框
-    #     @param pp_bboxes: list PointPillars检测的边界框
-    #     @return: list 融合后的边界框
-    #     '''
-    #     fusion_boxes = []
-    #     fusion_scores = []
-
-    #     for yolo_bbox in yolo_bboxes:
-    #         for pp_bbox in pp_bboxes:
-    #             iou_value = self.iou(yolo_bbox, pp_bbox)
-    #             if iou_value > 0.5:  # IoU阈值
-    #                 fusion_box = {
-    #                     'x_min': min(yolo_bbox['x_min'], pp_bbox['x_min']),
-    #                     'y_min': min(yolo_bbox['y_min'], pp_bbox['y_min']),
-    #                     'x_max': max(yolo_bbox['x_max'], pp_bbox['x_max']),
-    #                     'y_max': max(yolo_bbox['y_max'], pp_bbox['y_max']),
-    #                     'confidence': max(yolo_bbox['confidence'], pp_bbox['confidence']),
-    #                     'label': yolo_bbox['label']  # Assuming the label is the same
-    #                 }
-    #                 fusion_boxes.append(fusion_box)
-    #                 fusion_scores.append(fusion_box['confidence'])
-
-    #     # Apply Non-Maximum Suppression (NMS)
-    #     final_boxes = self.non_max_suppression(fusion_boxes, fusion_scores, iou_threshold=0.3)
-    #     return final_boxes
-
-    # def non_max_suppression(self, fusion_boxes, fusion_scores, iou_threshold):
-    #     '''
-    #     非极大值抑制（Non-Maximum Suppression, NMS）
-    #     @param fusion_boxes: list 融合后的边界框
-    #     @param fusion_scores: list 融合后的置信度
-    #     @param iou_threshold: float IoU阈值
-    #     @return: list 经过NMS处理后的边界框列表
-    #     '''
-    #     if len(fusion_boxes) == 0:
-    #         return []
-
-    #     indices = np.argsort(fusion_scores)[::-1]
-    #     keep_boxes = []
-
-    #     while len(indices) > 0:
-    #         current_index = indices[0]
-    #         current_box = fusion_boxes[current_index]
-    #         keep_boxes.append(current_box)
-    #         indices = indices[1:]
-
-    #         remaining_indices = []
-    #         for i in indices:
-    #             iou_value = self.iou(current_box, fusion_boxes[i])
-    #             if iou_value < iou_threshold:
-    #                 remaining_indices.append(i)
-
-    #         indices = remaining_indices
-
-    #     return keep_boxes
-
 
 if __name__ == '__main__':
     try:
-        fusion = FusionDecision()
+        args = parse_arguments()
+        print(args)
+        fusion = FusionDecision(args.yolo_conf, args.pp_conf,  # 置信度阈值
+                                args.iou_thresh,  # iou 阈值
+                                args.yolo_weight, args.pp_weight)  # nms融合权重
         rospy.spin()
     except rospy.ROSInterruptException:
         pass

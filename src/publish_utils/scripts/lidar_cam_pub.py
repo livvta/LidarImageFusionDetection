@@ -15,9 +15,10 @@ Last Modified: 2024-11-28 21:04
 1. 接收来自Velodyne VLP-16激光雷达点云消息, 过滤掉无效点云, 通过ros发布PointCloud2消息。
 """
 
+import math
+import argparse
 import rospy
 import numpy as np
-import math
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs.msg import Image
 from std_msgs.msg import Header
@@ -27,27 +28,28 @@ import sensor_msgs.point_cloud2 as pc2
 
 PUB_IMAGE = True
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Synchronize and publish lidar and camera data with controlled frequency.')
+    parser.add_argument('-r', type=int, default=5, help='Divisor for the publish rate. Default is 5 (10Hz -> 2Hz).')
+    args = parser.parse_args()
+    return args
+
 
 class LidarCamPub:
-    def __init__(self):
-        # 初始化ros节点, 节点名称为pointpillars_node
+    def __init__(self, publish_rate_divisor):
         rospy.init_node('lidar_cam_pub', anonymous=False)
-
-        # 点云消息订阅与发布
         self.pointcloud_sub = rospy.Subscriber('velodyne_points', PointCloud2, self.callback, queue_size=10)
         self.processed_pointcloud_pub = rospy.Publisher('processed_points', PointCloud2, queue_size=10)
-
-        # 图像消息订阅与发布
         if PUB_IMAGE:
             self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback, queue_size=10)
             self.synced_image_pub = rospy.Publisher('synced_image', Image, queue_size=2)
 
-        # angle_boundaries话题, 消息类型为Marker, 用于可视化检测范围
         self.marker_pub = rospy.Publisher('angle_boundaries', Marker, queue_size=10)
         self.marker = self.create_angle_boundaries()
 
         self.callback_count = 0
         self.img_msg = None
+        self.publish_rate_divisor = publish_rate_divisor  # 从命令行参数获取
 
     def image_callback(self, img_msg):
         self.img_msg = img_msg
@@ -55,7 +57,7 @@ class LidarCamPub:
     def callback(self, pcl_msg):
         self.callback_count += 1
 
-        if self.callback_count >= 5:  # 每5条消息处理一次  10Hz -> 2Hz
+        if self.callback_count >= self.publish_rate_divisor:  # 每5条消息处理一次  10Hz -> 2Hz
             self.callback_count = 0
 
             # 进行点云处理
@@ -148,7 +150,9 @@ class LidarCamPub:
         self.processed_pointcloud_pub.publish(point_cloud_msg)
 
     def create_angle_boundaries(self):
-        """设置过滤范围边界线消息"""
+        """
+        设置过滤范围边界线消息
+        """
         # 计算边界线的端点
         line_length = 7  # 设置线长
         x_origin = 1.0  # 设置原点
@@ -190,7 +194,9 @@ class LidarCamPub:
 
 if __name__ == "__main__":
     try:
-        lidar_cam_pub = LidarCamPub()
+        args = parse_arguments()
+        print("publish_rate_divisor:", args.r)
+        lidar_cam_pub = LidarCamPub(args.r)
         rospy.spin()
     except rospy.ROSInterruptException:
         pass
