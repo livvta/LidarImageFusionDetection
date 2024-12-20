@@ -26,6 +26,25 @@ def read_calib():
     imu2lidar_m = np.vstack((imu2lidar_m, np.array([0, 0, 0, 1])))
     return P0, P1, P2, P3, R0, lidar2camera_m, imu2lidar_m
 
+
+def calibration_param():
+    """
+    计算标定内外参数
+    """
+    P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix = read_calib()
+    intrinsic = P2[:, :3]  # Cam 2(color)
+    """
+                    [fx   0  cx]
+        intrinsic = [ 0  fy  cy]  fx, fy:相机焦距
+                    [ 0   0   1]  cx, cy:相机主点
+    """
+    extrinsic = np.matmul(R0, lidar2camera_matrix)
+    """
+        extrinsic = [R | T]       R:旋转矩阵[3, 3]
+                                  T:平移向量[3, 1]
+    """
+    return intrinsic, extrinsic
+
 def imgmsg_to_cv2(img_msg):
     """
     将ROS Image消息转换为OpenCV格式

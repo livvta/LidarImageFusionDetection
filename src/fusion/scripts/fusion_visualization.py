@@ -5,8 +5,8 @@
 fusion_visualization
 ================
 
-Version: 1.2.1
-Last Modified: 2024-11-15 10:47
+Version: 2.0
+Last Modified: 2024-12-20
 """
 
 import rospy
@@ -16,65 +16,66 @@ import open3d as o3d
 import matplotlib.pyplot as plt
 import open3d.core as o3c
 from sensor_msgs.msg import PointCloud2, Image
-from fusion_utils import read_calib, imgmsg_to_cv2, process_points
+from fusion_utils import calibration_param, imgmsg_to_cv2, process_points
 from yolov5_ros.msg import BoundingBox2DArray
 
-
 # 读取标定文件
-P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix = read_calib()
-intrinsic = P2[:, :3]
-extrinsic = np.matmul(R0, lidar2camera_matrix)
+intrinsic, extrinsic = calibration_param()
 
 
 class FusionVisualization:
+    """
+    点云上色渲染, 可视化融合后检测结果
+    """
     def __init__(self):
         rospy.init_node('fusion_visualization', anonymous=False)  # 初始化ros节点
         self.pointcloud_sub = rospy.Subscriber('processed_points', PointCloud2, self.pointcloud_callback)  # 订阅点云话题
-        self.image_sub = rospy.Subscriber('synced_image', Image, self.image_callback)
-        self.detection_sub = rospy.Subscriber('fusion_results', BoundingBox2DArray, self.detection_callback)  # 发布融合后结果
+        self.image_sub = rospy.Subscriber('synced_image', Image, self.image_callback)  # 订阅图像话题
+        self.detection_sub = rospy.Subscriber('fusion_results', BoundingBox2DArray, self.detection_callback)  # 订阅融合后结果
 
         # 初始化变量
-        self.cv_image = None
         self.depth = None
+        self.cv_image = None
         self.initialized = False
+        self.height, self.width = None, None
 
     def image_callback(self, img_msg):
-        # 将Image消息转换为cv2图像
+        """
+        将Image消息转换为cv2图像
+        """
         self.cv_image = imgmsg_to_cv2(img_msg)
         if not self.initialized:
             self.height, self.width = self.cv_image.shape[:2]
             self.initialized = True  # 获取图像height和width, 避免重复初始化
 
     def pointcloud_callback(self, pcl_msg):
-        # 解析点云消息
+        """
+        解析点云消息
+        """
         self.points = process_points(pcl_msg)
 
     def detection_callback(self, msg):
+        """
+        融合及可视化
+        """
         if self.cv_image is not None:
-            self.fuse_and_display(msg)
-
-    def fuse_and_display(self, msg):
-        # 三维点云投影生成深度图
-        self.depth = self.points_to_depth(self.points, self.height, self.width, intrinsic, extrinsic)
-
-        # 深度图上色渲染
-        colored_depth = self.depth_colorize(self.depth)
-
-        # 叠加上色后深度图至相机图像
-        fusion_image = self.blend_images(self.cv_image, colored_depth)
-
-        # 绘制检测结果
-        self.draw_detection(msg, fusion_image)
+            self.depth = self.points_to_depth(self.points, self.height, self.width, intrinsic, extrinsic)  # 三维点云投影生成深度图
+            colored_depth = self.depth_colorize(self.depth)  # 深度图上色渲染
+            fusion_image = self.blend_images(self.cv_image, colored_depth)  # 叠加上色后深度图至相机图像
+            self.draw_detection(msg, fusion_image)  # 绘制检测结果
 
     def draw_detection(self, msg, image):
+        """
+        绘制检测结果
+        """
+        font = cv2.FONT_HERSHEY_SIMPLEX  # 字体
+        thickness = 1       # 标签字体粗细
+        font_size = 0.5     # 标签字号
         labels = {
             0: 'Pedestrian',
             1: 'Cyclist',
             2: 'Car'
         }
-        font = cv2.FONT_HERSHEY_SIMPLEX  # 字体
-        thickness = 1       # 标签字体粗细
-        font_size = 0.5     # 标签字号
 
         for box in msg.boxes:
             x_min = int(box.x_min)
