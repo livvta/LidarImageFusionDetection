@@ -16,6 +16,7 @@ import numpy as np
 from std_msgs.msg import String
 from fusion_utils import calibration_param
 from yolov5_ros.msg import BoundingBox2D, BoundingBox2DArray
+from message_filters import Subscriber, ApproximateTimeSynchronizer
 
 # 读取标定文件
 intrinsic, extrinsic = calibration_param()
@@ -38,9 +39,6 @@ class FusionDecision:
     """
     def __init__(self, yolo_conf, pp_conf, iou_threshold, yolo_weight, pp_weight):
         rospy.init_node('fusion_decision', anonymous=False)
-        self.pp_results_sub = rospy.Subscriber('pp_results', String, self.pp_results_callback)
-        self.yolo_results_sub = rospy.Subscriber('yolo_results', BoundingBox2DArray, self.yolo_results_callback)
-        self.fusion_detection_pub = rospy.Publisher('fusion_results', BoundingBox2DArray, queue_size=10)
 
         # 初始化参数
         self.yolo_detection_bboxes = []
@@ -50,40 +48,62 @@ class FusionDecision:
         self.yolo_weight = yolo_weight
         self.pp_weight = pp_weight
 
-    def pp_results_callback(self, pp_results):
+        # 创建订阅者
+        self.pp_results_sub = Subscriber('pp_results', String)
+        self.yolo_results_sub = Subscriber('yolo_results', BoundingBox2DArray)
+
+        # 同步订阅者
+        self.sync = ApproximateTimeSynchronizer(
+            [self.pp_results_sub, self.yolo_results_sub],
+            queue_size=10,
+            slop=0.1  # 时间戳误差允许范围（秒）
+        )
+        self.sync.registerCallback(self.fusion_callback)
+
+        # 发布融合结果
+        self.fusion_detection_pub = rospy.Publisher('fusion_results', BoundingBox2DArray, queue_size=10)
+
+    def fusion_callback(self, pp_results, yolo_results):
+        """
+        同步接收并融合来自 PointPillars 和 YOLO 的结果。
+        """
+        # 处理 PointPillars 结果
         labels_3d, scores_3d, bboxes_3d, _ = self.load_pp_result(pp_results)
         corners_3d = self.bbox3d_center_to_corners(bboxes_3d)
         projected_corners = self.project_3d_to_2d(corners_3d, intrinsic, extrinsic)
         pp_detected_bboxes = self.bboxes_3d_to_2d(projected_corners, scores_3d, labels_3d)
-        final_results = self.weighted_nms(self.yolo_detection_bboxes + pp_detected_bboxes)
+
+        # 处理 YOLO 结果
+        yolo_detected_bboxes = self.process_yolo_results(yolo_results)
+
+        # 融合结果
+        final_results = self.weighted_nms(pp_detected_bboxes + yolo_detected_bboxes)
+
+        # 发布融合后的结果
         self.publish_fusion_results(final_results)
 
-        # print("\n============================")
-        # print("yolo_detection_bboxes", self.yolo_detection_bboxes)
-        # print("\n============================")
-        # print("pp_detected_bboxes", pp_detected_bboxes)
-        # print("\n============================")
-        # print("final_results", final_results)
-        # print("\n============================")
+    # def pp_results_callback(self, pp_results):
+    #     labels_3d, scores_3d, bboxes_3d, _ = self.load_pp_result(pp_results)
+    #     corners_3d = self.bbox3d_center_to_corners(bboxes_3d)
+    #     projected_corners = self.project_3d_to_2d(corners_3d, intrinsic, extrinsic)
+    #     pp_detected_bboxes = self.bboxes_3d_to_2d(projected_corners, scores_3d, labels_3d)
+    #     final_results = self.weighted_nms(self.yolo_detection_bboxes + pp_detected_bboxes)
+    #     self.publish_fusion_results(final_results)
 
-    def yolo_results_callback(self, yolo_results):
-        """
-        读取BoundingBox2DArray格式消息,将消息转换后准备送入iou计算
-        @param yolo_results:      BoundingBox2DArray
-        -------------------------------------------------
-        yolov5_ros.msg/BoundingBox2D.msg
-        float32 x_min // 左上角x坐标
-        float32 y_min // 左上角y坐标
-        float32 x_max // 右下角x坐标
-        float32 y_max // 右下角y坐标
-        float32 value // 置信度
-        uint32 label  // 类别
-        -------------------------------------------------
-        yolov5_ros.msg/BoundingBox2DArray.msg
-        Header header // ROS消息头
-        BoundingBox2D[] boxes
-        """
-        self.yolo_detection_bboxes = self.process_yolo_results(yolo_results)
+    #     # print("\n============================")
+    #     # print("yolo_detection_bboxes", self.yolo_detection_bboxes)
+    #     # print("\n============================")
+    #     # print("pp_detected_bboxes", pp_detected_bboxes)
+    #     # print("\n============================")
+    #     # print("final_results", final_results)
+    #     # print("\n============================")
+
+    # def yolo_results_callback(self, yolo_results):
+    #     """
+    #     读取BoundingBox2DArray格式消息,将消息转换后准备送入iou计算
+    #     @param yolo_results:      BoundingBox2DArray
+    #     """
+    #     self.yolo_detection_bboxes = self.process_yolo_results(yolo_results)
 
     def load_pp_result(self, pp_results):
         """
@@ -303,6 +323,18 @@ class FusionDecision:
         发布融合后的检测结果
         @param detections:  list      检测结果列表
         @return:            None      无返回值, 直接发布消息
+        -------------------------------------------------
+        yolov5_ros.msg/BoundingBox2D.msg
+        float32 x_min // 左上角x坐标
+        float32 y_min // 左上角y坐标
+        float32 x_max // 右下角x坐标
+        float32 y_max // 右下角y坐标
+        float32 value // 置信度
+        uint32 label  // 类别
+        -------------------------------------------------
+        yolov5_ros.msg/BoundingBox2DArray.msg
+        Header header // ROS消息头
+        BoundingBox2D[] boxes
         """
         msg = BoundingBox2DArray()
         msg.header.stamp = rospy.Time.now()

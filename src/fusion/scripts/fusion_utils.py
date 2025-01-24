@@ -94,9 +94,9 @@ def bbox3d_center_to_corners(bboxes):
     @param bboxes:      np.ndarray  [N, 7]
     @return:            np.ndarray  [N, 8, 3]
 
-            ^ z   x            6 ------ 5
-            |   /             / |     / |
-            |  /             2 -|---- 1 |
+           ^ z   x            6 ------ 5
+           |   /             / |     / |
+           |  /             2 -|---- 1 |
     y      | /              |  |     | |
     <------|o               | 7 -----| 4
                             |/   o   |/
