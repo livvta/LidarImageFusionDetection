@@ -155,7 +155,8 @@ class FusionVisualization:
         """
         # 将输入图像转换为BGRA格式
         image_bgra = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)
-
+        print("image_bgra shape:", image_bgra.shape, "dtype:", image_bgra.dtype)
+        print("colored_depth shape:", colored_depth.shape, "dtype:", colored_depth.dtype)
         # 将 colored_depth 叠加到 image_bgra 上
         blended_image = cv2.addWeighted(image_bgra, 1, colored_depth, 1, 0)
         return blended_image
