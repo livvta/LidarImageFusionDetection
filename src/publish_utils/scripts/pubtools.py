@@ -143,9 +143,16 @@ if __name__ == '__main__':
 
     IMAGE_KITTI_RAW = '/media/harris/PM981/kitti_16/testing/image_2'
     PC_KITTI_RAW_16 = '/media/harris/PM981/kitti_16/testing/velodyne'
+
+    IMAGE_KITTI_RAW_TRAIN = '/media/harris/PM981/KITTI_RAW/data_object_image_2/training/image_2'
+    PC_KITTI_RAW_TRAIN = '/media/harris/PM981/KITTI_RAW/data_object_velodyne/training/velodyne'
+
     IMAGE_09260005 = '/home/harris/dataset/RawData/2011_09_26/2011_09_26_drive_0005_sync/image_02/data/'
     PC_09260005_64 = '/home/harris/dataset/RawData/2011_09_26/2011_09_26_drive_0005_sync/velodyne_points/data/'
     PC_09260005_16 = '/home/harris/dataset/RawData/2011_09_26/2011_09_26_drive_0005_sync/velodyne_points/d_data/'
+
+    IMAGE_KITTI_RAW_TEST = '/media/harris/PM981/KITTI_RAW/data_object_image_2/testing/image_2'
+    PC_KITTI_RAW_TEST = '/media/harris/PM981/KITTI_RAW/data_object_velodyne/testing/velodyne'
 
     print("                                             ")
     print("  ____        _     _____            _       ")
@@ -158,7 +165,9 @@ if __name__ == '__main__':
     print("请选择要发布的数据集:")
     print("1. 09260005_64线")
     print("2. 09260005_16线")
-    print("3. KITTI_RAW_16线")
+    print("3. KITTI_RAW_64线_TRAIN")
+    print("4. KITTI_RAW_16线")
+    print("5. KITTI_RAW_64线_TEST")
 
     dataset_select = raw_input("Enter: ")
 
@@ -169,8 +178,14 @@ if __name__ == '__main__':
         image_path = IMAGE_09260005
         pc_path = PC_09260005_16
     elif dataset_select == '3':
+        image_path = IMAGE_KITTI_RAW_TRAIN
+        pc_path = PC_KITTI_RAW_TRAIN
+    elif dataset_select == '4':
         image_path = IMAGE_KITTI_RAW
         pc_path = PC_KITTI_RAW_16
+    elif dataset_select == '5':
+        image_path = IMAGE_KITTI_RAW_TEST
+        pc_path = PC_KITTI_RAW_TEST
 
     print("======================================")
     print("请选择发布方式:")
