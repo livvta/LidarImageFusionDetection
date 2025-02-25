@@ -1,10 +1,11 @@
 import sys
+import cv2
 import numpy as np
 from sensor_msgs.msg import Image
 import sensor_msgs.point_cloud2 as pcl2
 
 # 标定文件路径
-calib_path = '/home/harris/detection_ws/src/fusion/scripts/calibration.txt'
+calib_path = '/home/harris/detection_ws/src/fusion/scripts/calibration_apollo.txt'
 
 
 def read_calib():
@@ -15,7 +16,7 @@ def read_calib():
         raw = f.readlines()
     P0 = np.array(list(map(float, raw[0].split()[1:]))).reshape((3, 4))
     P1 = np.array(list(map(float, raw[1].split()[1:]))).reshape((3, 4))
-    P2 = np.array(list(map(float, raw[2].split()[1:]))).reshape((3, 4))
+    P2 = np.array(list(map(float, raw[2].split()[1:]))).reshape((3, 4))  # 此为KITTI相机内参
     P3 = np.array(list(map(float, raw[3].split()[1:]))).reshape((3, 4))
     R0 = np.array(list(map(float, raw[4].split()[1:]))).reshape((3, 3))
     R0 = np.hstack((R0, np.array([[0], [0], [0]])))
@@ -24,15 +25,20 @@ def read_calib():
     lidar2camera_m = np.vstack((lidar2camera_m, np.array([0, 0, 0, 1])))
     imu2lidar_m = np.array(list(map(float, raw[6].split()[1:]))).reshape((3, 4))
     imu2lidar_m = np.vstack((imu2lidar_m, np.array([0, 0, 0, 1])))
-    return P0, P1, P2, P3, R0, lidar2camera_m, imu2lidar_m
+
+    # Attetion！！！仅在Apollo实验时启用以下代码
+    P2 = np.array(list(map(float, raw[7].split()[1:]))).reshape((3, 4))  # 此为Apollo摄像头内参
+    apollo_extrinsic = np.array(list(map(float, raw[8].split()[1:]))).reshape((3, 4))  # 此为Apollo摄像头外参
+    apollo_extrinsic = np.vstack((apollo_extrinsic, np.array([0, 0, 0, 1])))  # 此为Apollo摄像头外参
+    return P0, P1, P2, P3, R0, lidar2camera_m, imu2lidar_m, apollo_extrinsic
 
 
 def calibration_param():
     """
     计算标定内外参数
     """
-    P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix = read_calib()
-    intrinsic = P2[:, :3]  # Cam 2(color)
+    P0, P1, P2, P3, R0, lidar2camera_matrix, imu2lidar_matrix, apollo_extrinsic= read_calib()
+    intrinsic = P2[:, :3]  # KITTI Cam 2(color)
     """
                     [fx   0  cx]
         intrinsic = [ 0  fy  cy]  fx, fy:相机焦距
@@ -43,6 +49,13 @@ def calibration_param():
         extrinsic = [R | T]       R:旋转矩阵[3, 3]
                                   T:平移向量[3, 1]
     """
+
+    # Attetion！！！仅在Apollo实验时启用以下代码
+    intrinsic = P2  # Only for Apollo
+    extrinsic = apollo_extrinsic  # Only for Apollo
+    print("R0\n", R0)
+    print("intrinsic\n", intrinsic)
+    print("extrinsic\n", extrinsic)
     return intrinsic, extrinsic
 
 def imgmsg_to_cv2(img_msg):
@@ -52,7 +65,7 @@ def imgmsg_to_cv2(img_msg):
     @return:             np.ndarray  OpenCV格式图像
     """
 
-    if img_msg.encoding != "bgr8":  # 检查图像编码格式
+    if img_msg.encoding not in ["bgr8", "rgb8"]:  # 检查图像编码格式
         raise ValueError("Unsupported image encoding: {}".format(img_msg.encoding))
     dtype = np.dtype("uint8").newbyteorder('>' if img_msg.is_bigendian else '<')  # 创建图像数据类型
     image_opencv = np.ndarray(
@@ -60,6 +73,8 @@ def imgmsg_to_cv2(img_msg):
         dtype=dtype,
         buffer=img_msg.data
     )  # 使用缓冲区创建 OpenCV 图像
+    if img_msg.encoding == "rgb8":
+        image_opencv = cv2.cvtColor(image_opencv, cv2.COLOR_RGB2BGR)
     if img_msg.is_bigendian == (sys.byteorder == 'little'):
         image_opencv = image_opencv.byteswap().newbyteorder()
     return image_opencv
