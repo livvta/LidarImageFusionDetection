@@ -33,12 +33,12 @@ checkpoint_file = '/home/harris/model/mmdetection3d/work_dirs/pointpillars_hv_se
 device = 'cuda:0'
 
 # 基于KITTI训练的模型, batch_size = 4
-# config_file = '/home/harris/model/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class1/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class1.py'
-# checkpoint_file = '/home/harris/model/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class1/epoch_80.pth'
+# config_file = '/home/harris/model/mmdetection3d/work_dirs/pointpillars_hv_secfpn_8xb4-160e_kitti-3d-3class/pointpillars_hv_secfpn_8xb4-160e_kitti-3d-3class.py'
+# checkpoint_file = '/home/harris/model/mmdetection3d/work_dirs/pointpillars_hv_secfpn_8xb4-160e_kitti-3d-3class/epoch_80.pth'
 
-# 基于KITTI_16训练的模型
-# config_file = '/home/harris/model/mmdetection3d/work_dirs/pointpillars_my_config_hv_secfpn/pointpillars_my_config_hv_secfpn.py'
-# checkpoint_file = '/home/harris/model/mmdetection3d/work_dirs/pointpillars_my_config_hv_secfpn/epoch_80.pth'
+# 基于KITTI_16训练的模型, batch_size = 4
+# config_file = '/home/harris/model/mmdetection3d/work_dirs/pointpillars_hv_secfpn_8xb4-160e_kitti16-3d-3class/pointpillars_my_config_hv_secfpn.py'
+# checkpoint_file = '/home/harris/model/mmdetection3d/work_dirs/pointpillars_hv_secfpn_8xb4-160e_kitti16-3d-3class/epoch_80.pth'
 
 # 是否启用可视化功能
 rviz_visualization = True
