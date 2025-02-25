@@ -5,12 +5,8 @@
 yolov5_node
 ================
 
-Version: 2.3
-Last Modified: 2024-12-28
-
-更新日志:
-11.05: 将YOLODetection消息类型更新为BoundingBox2DArray
-11.08: 提高代码复用, 优化可视化效果
+Version: 2.3.1
+Last Modified: 2025-02-26
 """
 
 import cv2
@@ -77,7 +73,7 @@ class YoloV5Node:
         @param img_msg:      ROS Image消息
         @return:             np.ndarray  OpenCV格式图像
         """
-        if img_msg.encoding != "bgr8":  # 检查图像编码格式
+        if img_msg.encoding not in ["bgr8", "rgb8"]:  # 检查图像编码格式
             raise ValueError("Unsupported image encoding: {}".format(img_msg.encoding))
         dtype = np.dtype("uint8").newbyteorder('>' if img_msg.is_bigendian else '<')  # 创建图像数据类型
         image_opencv = np.ndarray(
@@ -85,6 +81,8 @@ class YoloV5Node:
             dtype=dtype,
             buffer=img_msg.data
         )  # 使用缓冲区创建 OpenCV 图像
+        if img_msg.encoding == "rgb8":
+            image_opencv = cv2.cvtColor(image_opencv, cv2.COLOR_RGB2BGR)
         return image_opencv
 
 
