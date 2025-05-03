@@ -170,6 +170,8 @@ class YoloV5Node:
             label = label_map.get(int(cls), int(cls)) # 字典映射
 
             bbox2d = BoundingBox2D()
+            bbox2d.header.stamp = rospy.Time.now()
+            bbox2d.header.frame_id = "camera_link"
             bbox2d.x_min = float(x_min)
             bbox2d.y_min = float(y_min)
             bbox2d.x_max = float(x_max)
