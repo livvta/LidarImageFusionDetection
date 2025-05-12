@@ -1,44 +1,95 @@
-# 基于激光雷达与图像信息融合的道路目标检测
+### 基于激光雷达与图像信息融合的道路目标检测
+> 山东交通学院 轨道交通学院 Shandong Jiaotong University  
+> 李浩洋 LI HAOYANG  
+> Updated on May 12, 2025  
 
-## TODO
-1. 使用Apollo D-KIT Lite采集激光雷达点云与摄像头图像数据
-2. 决策策略程序优化
-3. 激光雷达与摄像头联合标定
-4. 16Channels 点云数据集训练
+## 运行方式
 
-## 周进展
-第1周：查阅文献，探索多模态信息融合策略。  
-第2周：安装Linux、CUDA驱动，配置Conda和ROS环境。  
-第3周：进行数据集（图像、点云）的预处理。  
-第4周：完成雷达与相机的联合标定。  
-第5周：训练并优化YOLO模型。  
-第6周：编写YOLO检测、可视化与消息发布程序。  
-第7周：训练并优化PointPillars模型。  
-第8周：编写PointPillars检测、可视化与消息发布程序。  
-第9周：编写并调试检测结果可视化程序。中期答辩。  
-第10周：编写融合决策程序，开始论文初稿的撰写。  
-第11周：程序实车部署，进行程序功能调试，并优化算法。  
-第12周：程序定稿打包，并完成论文初稿的撰写。  
-第13周：修改与完善论文，开始制作答辩PPT。  
-第14周：完成终稿的撰写，完成答辩PPT的制作。  
-第15周：进行论文答辩。
+0. 项目运行的一切建立在ROS上，所以 ```roscore，启动！```
+   ```
+   roscore
+   ```
 
----
+1. 请选择合适的方式发布数据（```PubTools```or```播包```or```硬件驱动```）
+   ```
+   # 启动 PubTools
+   cd ~/detection_ws/src/publish_utils/scripts
+   python2 pubtools.py
+   ```
 
-### 第五周进展
-一、完成YoloV5Node节点，具体功能如下：
-1. 订阅`Image`类型图像话题。
-2. 编写图像处理函数，将ROS `Image`消息转换为OpenCV格式，避免CVBridge兼容性问题。
-3. 使用YOLOv5s模型进行目标检测。
-4. 使用OpenCV绘制可视化YOLO检测结果。
-5. 定义新的ROS消息类型，发布检测结果，以便后续多模态结果融合。
-二、完成CameraPub节点，用于发布相机原始数据。
-三、完成LidarCamPub节点部分功能，用于同步激光雷达点云与图像消息，并对发布频率进行控制。
-四、完成PubTool节点，支持自动/手动顺序发布KITTI图像/点云，用于测试模型。
+   ```
+   # 播包
+   # 0.5倍播包请加 -r 0.5
+   rosbag play 2025-02-23-16-35-54.bag --loop -r 0.5 /usb_cam/image_raw:=/camera/image_raw
+   rosbag play 2025-02-23-16-35-54.bag --loop -r 0.5 /velodyne_points:=/points_raw
+   ```
 
----
+   ```
+   # 启动 Velodyne VLP-16 激光雷达
+   roslaunch velodyne_pointcloud VLP16_points.launch
+   ```
 
-### 第六周进展
-基于第三周预处理后的16线KITTI点云数据集及原始64线KITTI数据集，训练了多个PointPillars模型，这些模型适用于不同型号的激光雷达。通过对不同模型及不同测试集的系统比较，确定了模型与测试数据集的最优匹配方案。为实车部署及后续多传感器融合奠定了坚实基础。PointPillars模型在目标检测任务中表现出卓越的识别能力，并且具有良好的泛化性能，能够高效地完成道路目标检测任务。
+   ```
+   # 启动 usb_cam （请确保已安装好驱动）
+   roslaunch usb_cam usb_cam-test.launch
+   ```
+   在启动驱动时可能会遇到问题 请检查并排除以下常见原因
+   1. 驱动未成功安装
+   2. USB拓展坞
 
----
+2. 启动数据预处理及频率控制模块
+   ```
+   cd ~/detection_ws/src/publish_utils/scripts
+   python2 lidar_cam_pub.py
+   ```
+
+3. 启动pointpillars节点
+   ```
+   conda activate pytorch12
+   rosrun pointpillars_ros pointpillars_node.py
+   ```
+
+4. 启动yolov5节点
+   ```
+   conda activate yolov5
+   rosrun yolov5_ros yolov5_node.py
+   ```
+
+5. 启动融合模块
+   ```
+   conda activate pytorch12
+   cd ~/detection_ws/src/fusion/scripts
+   python fusion_decision.py -iou_thresh=0.4 -pp_weight=1.0 -yolo_weight=0.9
+   ```
+
+### 常见问题
+
+1. Autoware联合标定
+   ```
+   cd catkin_ws
+   source devel/setup.bash
+   rosrun calibration_camera_lidar calibration_toolkit
+   ```
+
+2. 如果移动了mmdetection3d源码的位置需要重新编译一下
+   ```
+   cd mmdetection3d
+   mim install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple
+   ```
+
+3. 休眠后torch报错
+   ```
+   sudo rmmod nvidia_uvm
+   sudo modprobe nvidia_uvm
+   ```
+
+4. 绘制图像
+   ```
+   # 绘制PointPillars_KITTI16 loss曲线
+   python tools/analysis_tools/analyze_logs.py plot_curve work_dirs/pointpillars_hv_secfpn_8xb4-160e_kitti16-3d-3class/20241127_205454/vis_data/20241127_205454.json --keys loss_cls loss_bbox  --legend loss_cls_PointPillars_KITTI16  loss_bbox_PointPillars_KITTI16
+
+   # 绘制PointPillars_KITTI64 loss曲线
+   python tools/analysis_tools/analyze_logs.py plot_curve work_dirs/pointpillars_hv_secfpn_8xb4-160e_kitti-3d-3class/20241012_201716/vis_data/20241012_201716.json --keys loss_cls loss_bbox --legend loss_cls_PointPillars_KITTI64 loss_bbox_PointPillars_KITTI64
+   ```
+
+### 其他的话
