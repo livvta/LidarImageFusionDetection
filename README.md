@@ -1,4 +1,7 @@
 # 基于激光雷达与图像信息融合的道路目标检测
+
+![可视化](https://github.com/livvta/LidarImageFusionDetection/blob/main/README_PIC/图片2.png)
+
 ## 运行方式
 
 0. 项目运行的一切建立在ROS上，所以 ```roscore，启动！```
@@ -109,6 +112,7 @@
    ```
 
 #### 更详细的请见代码注释，祝好运！
+![实车](https://github.com/livvta/LidarImageFusionDetection/blob/main/README_PIC/图片1.png)
 <br><br>
 > Updated on May 13, 2025  
 > 李浩洋 LI HAOYANG  
