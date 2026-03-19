@@ -1,9 +1,4 @@
-### 基于激光雷达与图像信息融合的道路目标检测
-
-> Updated on May 13, 2025  
-> 李浩洋 LI HAOYANG  
-> 山东交通学院 轨道交通学院 Shandong Jiaotong University  
-
+# 基于激光雷达与图像信息融合的道路目标检测
 ## 运行方式
 
 0. 项目运行的一切建立在ROS上，所以 ```roscore，启动！```
@@ -113,6 +108,8 @@
    python tools/analysis_tools/analyze_logs.py plot_curve work_dirs/pointpillars_hv_secfpn_8xb4-160e_kitti-3d-3class/20241012_201716/vis_data/20241012_201716.json --keys loss_cls loss_bbox --legend loss_cls_PointPillars_KITTI64 loss_bbox_PointPillars_KITTI64
    ```
 
-
-
 #### 更详细的请见代码注释，祝好运！
+<br><br>
+> Updated on May 13, 2025  
+> 李浩洋 LI HAOYANG  
+> 山东交通学院 轨道交通学院 Shandong Jiaotong University  
